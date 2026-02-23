@@ -1,6 +1,7 @@
 #!/usr/bin/env nextflow
 nextflow.enable.dsl = 2
-
+DATA_PATH = "${System.getProperty('user.dir')}/sample_dataset/nwb"
+RESULTS_PATH = "${System.getProperty('user.dir')}/sample_dataset/output"
 params.ecephys_path = DATA_PATH
 params.params_file = null
 
