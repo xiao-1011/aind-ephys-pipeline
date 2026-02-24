@@ -1,0 +1,746 @@
+(base) root@DESKTOP-BE1KCOP:/mnt/c/Users/xiao/git_repo/aind-ephys-pipeline/pipeline# nextflow run main_multi_backend.nf -c nextflow_local.config
+
+ N E X T F L O W   ~  version 25.10.4
+
+Launching `main_multi_backend.nf` [drunk_dalembert] DSL2 - revision: 405df8b61d
+
+DATA_PATH: /mnt/c/Users/xiao/git_repo/aind-ephys-pipeline/sample_dataset/nwb
+RESULTS_PATH: /mnt/c/Users/xiao/git_repo/aind-ephys-pipeline/sample_dataset/output
+Loaded parameters from /mnt/c/Users/xiao/git_repo/aind-ephys-pipeline/pipeline/active_params.json
+PARAMS: [executor:local, ecephys_path:/mnt/c/Users/xiao/git_repo/aind-ephys-pipeline/sample_dataset/nwb, results_path:/mnt/c/Users/xiao/git_repo/aind-ephys-pipeline/sample_dataset/output, params_file:/mnt/c/Users/xiao/git_repo/aind-ephys-pipeline/pipeline/active_params.json, git_repo_prefix:https://github.com/AllenNeuralDynamics/aind-]
+CONTAINER TAG: si-0.103.0
+N JOBS: -1
+Using RUNMODE: full
+Using parameters from JSON file: /mnt/c/Users/xiao/git_repo/aind-ephys-pipeline/pipeline/active_params.json
+No sorter specified, defaulting to kilosort4
+Using SORTER: kilosort4 with args:
+executor >  local (1)
+[a6/381ed0] job_dispatch (job-dispatch) | 1 of 1 ✔
+executor >  local (3)
+[a6/381ed0] job_dispatch (job-dispatch)   | 1 of 1 ✔
+executor >  local (3)
+[a6/381ed0] job_dispatch (job-dispatch)   | 1 of 1 ✔
+[7c/8c4380] preprocessing (preprocessing) | 1 of 1 ✔
+[-        ] spikesort_kilosort4           -
+[-        ] postprocessing                -
+[-        ] curation                      -
+[-        ] visualization                 -
+[-        ] results_collector             -
+[-        ] quality_control               -
+[-        ] quality_control_collector     -
+[aa/a98957] nwb_ecephys (nwb-ecephys)     | 0 of 1
+[-        ] nwb_units                     -
+[job-dispatch] cloning git repo...
+cloning git repo: https://github.com/AllenNeuralDynamics/aind-ephys-job-dispatch.git (commit: 421cce9e965faa09e7a88424118129b5f0db7dc5)...
+[job-dispatch] running capsule...
+Running job dispatcher with the following parameters:
+        SPLIT SEGMENTS: True
+        SPLIT GROUPS: True
+        DEBUG: False
+        DEBUG DURATION: 30.0
+Parsing SKIP TIMESTAMPS CHECK: False
+nwb_fileMULTI SESSION: False
+Parsing INPUT: nwb
+nwb_fileMIN_RECORDING_DURATION: -1
+Parsing nwb input folder
+nwb_files: [PosixPath('../data/ecephys_session/sample.nwb')]
+Processing NWB file: /mnt/c/Users/xiao/git_repo/aind-ephys-pipeline/pipeline/work/a6/381ed0ea13a5e53e6e35778ca62d69/capsule/code/../data/ecephys_session/sample.nwb
+RecordinSession name: sample
+GenerateNum. Blocks 1 - Num. streams: 1
+Recording to be processed in parallel:
+Generateblock0_acquisition-ElectricalSeriesRaw_recording1
+[job-dispatch] cDuration: 180.0 s - Num. channels: 32
+Generated 1 job config files
+[job-dispatch] completed!
+
+Max recording duration: 3min
+[preprocessing] cloning git repo...
+executor >  local (4)
+[a6/381ed0] job_dispatch (job-dispatch)               | 1 of 1 ✔
+[7c/8c4380] preprocessing (preprocessing)             | 1 of 1 ✔
+[ea/f8c8fe] spikesort_kilosort4 (spikesort-kilosort4) | 0 of 1
+[-        ] postprocessing                            -
+[-        ] curation                                  -
+[-        ] visualization                             -
+[-        ] results_collector                         -
+[-        ] quality_control                           -
+[-        ] quality_control_collector                 -
+[aa/a98957] nwb_ecephys (nwb-ecephys)                 | 0 of 1
+[-        ] nwb_units                                 -
+[job-dispatch] cloning git repo...
+cloning git repo: https://github.com/AllenNeuralDynamics/aind-ephys-job-dispatch.git (commit: 421cce9e965faa09e7a88424118129b5f0db7dc5)...
+[job-dispatch] running capsule...
+Running job dispatcher with the following parameters:
+Found 1 SPLIT SEGMENTS: True
+        SPLIT GROUPS: True
+        DEBUG: False
+PREPROCEDEBUG DURATION: 30.0
+PreproceSKIP TIMESTAMPS CHECK: False
+        MULTI SESSION: False
+        INPUT: nwb
+        MIN_RECORDING_DURATION: -1
+Parsing nwb input folder
+nwb_files: [PosixPath('../data/ecephys_session/sample.nwb')]
+Processing NWB file: /mnt/c/Users/xiao/git_repo/aind-ephys-pipeline/pipeline/work/a6/381ed0ea13a5e53e6e35778ca62d69/capsule/code/../data/ecephys_session/sample.nwb
+write_biSession name: sample
+engine=pNum. Blocks 1 - Num. streams: 1
+Recording to be processed in parallel:
+        block0_acquisition-ElectricalSeriesRaw_recording1
+                Duration: 180.0 s - Num. channels: 32
+Generated 1 job config files
+[job-dispatch] completed!
+
+Max recording duration: 3min
+[preprocessing] cloning git repo...
+executor >  local (4)
+[a6/381ed0] job_dispatch (job-dispatch)               | 1 of 1 ✔
+[7c/8c4380] preprocessing (preprocessing)             | 1 of 1 ✔
+[ea/f8c8fe] spikesort_kilosort4 (spikesort-kilosort4) | 0 of 1 ✔
+[-        ] postprocessing                            -
+[-        ] curation                                  -
+[-        ] visualization                             -
+[-        ] results_collector                         -
+[-        ] quality_control                           -
+[-        ] quality_control_collector                 -
+[aa/a98957] nwb_ecephys (nwb-ecephys)                 | 0 of 1
+[-        ] nwb_units                                 -
+[preprocessing] cloning git repo...
+cloning git repo: https://github.com/AllenNeuralDynamics/aind-ephys-preprocessing.git (commit: 9ef7b85c6d76ba84083f54e043ffe792ea16faa4)...
+[preprocessing] running capsule...
+Running preprocessing with the following parameters:
+Found 1 DENOISING_STRATEGY: cmr
+        FILTER TYPE: highpass
+        REMOVE_OUT_CHANNELS: True
+PREPROCEREMOVE_BAD_CHANNELS: True
+PreproceMAX BAD CHANNEL FRACTION: 0.5
+        COMPUTE_MOTION: True
+        APPLY_MOTION: False
+        MOTION PRESET: dredge_fast
+        MOTION TEMPORAL BIN S: 1
+        T_START: None
+        T_STOP: None
+        MIN_DURATION FOR PREPROCESSING: 120
+write_biN_JOBS: -1
+Found 1 configurations
+
+
+PREPROCESSING
+Preprocessing recording: sample - block0_acquisition-ElectricalSeriesRaw_recording1
+        Duration: 180.0 s
+        Bad channel detection:
+PREPROCESSING ti- dead channels - 0
+[preprocessing] - noise channels - 0
+                - out channels - 0
+WARN: ThRemoving 0 out channels
+WARN: ThRemoving 0 channels after cmr preprocessing
+write_binary_recording
+engine=process - n_jobs=16 - samples_per_chunk=25,000 - chunk_memory=3.05 MiB - total_memory=48.83 MiB - chunk_duration=1.00s
+        Computing motion correction with preset: dredge_fast
+                Using bin_s: 1
+                Using win_step_um: 30.0
+                Using win_scale_um: 30.0
+        Motion computed successfully!
+PREPROCESSING time: 22.31s
+[preprocessing] completed!
+
+[spikesort-kilosort4] cloning git repo...
+cloning git repo: https://github.com/AllenNeuralDynamics/aind-ephys-spikesort-kilosort4.git (commit: f5893a8cf00a2a941b39a77e1ed72c7f0be59bf1)...
+[spikesort-kilosort4] running capsule...
+
+executor >  local (4)
+[a6/381ed0] job_dispatch (job-dispatch)               | 1 of 1 ✔
+[7c/8c4380] preprocessing (preprocessing)             | 1 of 1 ✔
+[ea/f8c8fe] spikesort_kilosort4 (spikesort-kilosort4) | 1 of 1 ✔
+[-        ] postprocessing                            -
+[-        ] curation                                  -
+[-        ] visualization                             -
+[-        ] results_collector                         -
+[-        ] quality_control                           -
+[-        ] quality_control_collector                 -
+[aa/a98957] nwb_ecephys (nwb-ecephys)                 | 0 of 1
+[-        ] nwb_units                                 -
+[preprocessing] cloning git repo...
+cloning git repo: https://github.com/AllenNeuralDynamics/aind-ephys-preprocessing.git (commit: 9ef7b85c6d76ba84083f54e043ffe792ea16faa4)...
+[preprocessing] running capsule...
+Running preprocessing with the following parameters:
+        DENOISING_STRATEGY: cmr
+        FILTER TYPE: highpass
+        REMOVE_OUT_CHANNELS: True
+        REMOVE_BAD_CHANNELS: True
+        MAX BAD CHANNEL FRACTION: 0.5
+        COMPUTE_MOTION: True
+        APPLY_MOTION: False
+        MOTION PRESET: dredge_fast
+        MOTION TEMPORAL BIN S: 1
+        T_START: None
+        T_STOP: None
+        MIN_DURATION FOR PREPROCESSING: 120
+        N_JOBS: -1
+Found 1 configurations
+
+
+PREPROCESSING
+Preprocessing recording: sample - block0_acquisition-ElectricalSeriesRaw_recording1
+        Duration: 180.0 s
+        Bad channel detection:
+                - dead channels - 0
+                - noise channels - 0
+                - out channels - 0
+        Removing 0 out channels
+        Removing 0 channels after cmr preprocessing
+write_binary_recording
+engine=process - n_jobs=16 - samples_per_chunk=25,000 - chunk_memory=3.05 MiB - total_memory=48.83 MiB - chunk_duration=1.00s
+        Computing motion correction with preset: dredge_fast
+                Using bin_s: 1
+                Using win_step_um: 30.0
+                Using win_scale_um: 30.0
+        Motion computed successfully!
+PREPROCESSING time: 22.31s
+[preprocessing] completed!
+
+[spikesort-kilosort4] cloning git repo...
+cloning git repo: https://github.com/AllenNeuralDynamics/aind-ephys-spikesort-kilosort4.git (commit: f5893a8cf00a2a941b39a77e1ed72c7f0be59bf1)...
+[spikesort-kilosort4] running capsule...
+
+executor >  local (5)
+[a6/381ed0] job_dispatch (job-dispatch)               | 1 of 1 ✔
+[7c/8c4380] preprocessing (preprocessing)             | 1 of 1 ✔
+[ea/f8c8fe] spikesort_kilosort4 (spikesort-kilosort4) | 1 of 1 ✔
+[94/7c932c] postprocessing (postprocessing)           | 0 of 1
+[-        ] curation                                  -
+[-        ] visualization                             -
+[-        ] results_collector                         -
+[-        ] quality_control                           -
+[-        ] quality_control_collector                 -
+[aa/a98957] nwb_ecephys (nwb-ecephys)                 | 0 of 1
+[-        ] nwb_units                                 -
+[preprocessing] cloning git repo...
+cloning git repo: https://github.com/AllenNeuralDynamics/aind-ephys-preprocessing.git (commit: 9ef7b85c6d76ba84083f54e043ffe792ea16faa4)...
+[preprocessing] running capsule...
+Running preprocessing with the following parameters:
+        DENOISING_STRATEGY: cmr
+        FILTER TYPE: highpass
+        REMOVE_OUT_CHANNELS: True
+        REMOVE_BAD_CHANNELS: True
+        MAX BAD CHANNEL FRACTION: 0.5
+        COMPUTE_MOTION: True
+        APPLY_MOTION: False
+        MOTION PRESET: dredge_fast
+        MOTION TEMPORAL BIN S: 1
+        T_START: None
+        T_STOP: None
+        MIN_DURATION FOR PREPROCESSING: 120
+        N_JOBS: -1
+Found 1 configurations
+executor >  local (5)
+[a6/381ed0] job_dispatch (job-dispatch)               | 1 of 1 ✔
+[7c/8c4380] preprocessing (preprocessing)             | 1 of 1 ✔
+[ea/f8c8fe] spikesort_kilosort4 (spikesort-kilosort4) | 1 of 1 ✔
+[94/7c932c] postprocessing (postprocessing)           | 0 of 1
+[-        ] curation                                  -
+[-        ] visualization                             -
+[-        ] results_collector                         -
+[-        ] quality_control                           -
+[-        ] quality_control_collector                 -
+[aa/a98957] nwb_ecephys (nwb-ecephys)                 | 0 of 1
+[-        ] nwb_units                                 -
+[postprocessing] cloning git repo...
+cloning git repo: https://github.com/AllenNeuralDynamics/aind-ephys-postprocessing.git (commit: eeaa6801ed9cf05d893a6beb96a20b617c9b59f7)...
+[postprocessing] running capsule...
+Total /dev/shm size: 4.00 GB
+Free /dev/shm size: 4.00 GB
+Running postprocessing with the following parameters:
+PREPROCEUSE_MOTION_CORRECTED: False
+[preprocN_JOBS: -1
+
+POSTPROCESSING
+Found 1 json configurations
+9a77e1edProcessing block0_acquisition-ElectricalSeriesRaw_recording1
+[spikesoLoaded binary recording from JSON
+        Loading lazy recording from JSON
+        Creating sorting analyzer
+SPIKE SONumber of original units: 16 -- Number of units after de-duplication: 16
+        Setting temporary binary recording
+        Computing all postprocessing extensions
+        Computing quality metrics
+        Saving SortingAnalyzer to zarr
+POSTPROCESSING time: 116.31s
+[postprocessing] completed!
+
+
+executor >  local (6)
+[a6/381ed0] job_dispatch (job-dispatch)               | 1 of 1 ✔
+[7c/8c4380] preprocessing (preprocessing)             | 1 of 1 ✔
+[ea/f8c8fe] spikesort_kilosort4 (spikesort-kilosort4) | 1 of 1 ✔
+[94/7c932c] postprocessing (postprocessing)           | 1 of 1 ✔
+[b2/a56b43] curation (curation)                       | 0 of 1
+[-        ] visualization                             -
+[-        ] results_collector                         -
+[-        ] quality_control                           -
+[-        ] quality_control_collector                 -
+[aa/a98957] nwb_ecephys (nwb-ecephys)                 | 0 of 1
+[-        ] nwb_units                                 -
+[postprocessing] cloning git repo...
+cloning git repo: https://github.com/AllenNeuralDynamics/aind-ephys-postprocessing.git (commit: eeaa6801ed9cf05d893a6beb96a20b617c9b59f7)...
+[postprocessing] running capsule...
+Total /dev/shm size: 4.00 GB
+Free /dev/shm size: 4.00 GB
+Running postprocessing with the following parameters:
+        USE_MOTION_CORRECTED: False
+        N_JOBS: -1
+
+POSTPROCESSING
+Found 1 json configurations
+        Processing block0_acquisition-ElectricalSeriesRaw_recording1
+        Loaded binary recording from JSON
+        Loading lazy recording from JSON
+        Creating sorting analyzer
+        Number of original units: 16 -- Number of units after de-duplication: 16
+        Setting temporary binary recording
+        Computing all postprocessing extensions
+        Computing quality metrics
+        Saving SortingAnalyzer to zarr
+POSTPROCESSING time: 116.31s
+[postprocessing] completed!
+
+
+executor >  local (6)
+[a6/381ed0] job_dispatch (job-dispatch)               | 1 of 1 ✔
+[7c/8c4380] preprocessing (preprocessing)             | 1 of 1 ✔
+[ea/f8c8fe] spikesort_kilosort4 (spikesort-kilosort4) | 1 of 1 ✔
+[94/7c932c] postprocessing (postprocessing)           | 1 of 1 ✔
+[b2/a56b43] curation (curation)                       | 1 of 1 ✔
+[-        ] visualization                             -
+[-        ] results_collector                         -
+[-        ] quality_control                           -
+[-        ] quality_control_collector                 -
+executor >  local (7)
+[a6/381ed0] job_dispatch (job-dispatch)               | 1 of 1 ✔
+[7c/8c4380] preprocessing (preprocessing)             | 1 of 1 ✔
+[ea/f8c8fe] spikesort_kilosort4 (spikesort-kilosort4) | 1 of 1 ✔
+[94/7c932c] postprocessing (postprocessing)           | 1 of 1 ✔
+[b2/a56b43] curation (curation)                       | 1 of 1 ✔
+[7f/3b9de7] visualization (visualization)             | 0 of 1
+[-        ] results_collector                         -
+[-        ] quality_control                           -
+[-        ] quality_control_collector                 -
+executor >  local (7)
+[a6/381ed0] job_dispatch (job-dispatch)               | 1 of 1 ✔
+[7c/8c4380] preprocessing (preprocessing)             | 1 of 1 ✔
+[ea/f8c8fe] spikesort_kilosort4 (spikesort-kilosort4) | 1 of 1 ✔
+[94/7c932c] postprocessing (postprocessing)           | 1 of 1 ✔
+[b2/a56b43] curation (curation)                       | 1 of 1 ✔
+[7f/3b9de7] visualization (visualization)             | 0 of 1
+[-        ] results_collector                         -
+[-        ] quality_control                           -
+[-        ] quality_control_collector                 -
+executor >  local (7)
+[a6/381ed0] job_dispatch (job-dispatch)               | 1 of 1 ✔
+[7c/8c4380] preprocessing (preprocessing)             | 1 of 1 ✔
+[ea/f8c8fe] spikesort_kilosort4 (spikesort-kilosort4) | 1 of 1 ✔
+[94/7c932c] postprocessing (postprocessing)           | 1 of 1 ✔
+[b2/a56b43] curation (curation)                       | 1 of 1 ✔
+[7f/3b9de7] visualization (visualization)             | 1 of 1 ✔
+[-        ] results_collector                         -
+[-        ] quality_control                           -
+[-        ] quality_control_collector                 -
+[aa/a98957] nwb_ecephys (nwb-ecephys)                 | 0 of 1
+[-        ] nwb_units                                 -
+[curation] cloning git repo...
+cloning git repo: https://github.com/AllenNeuralDynamics/aind-ephys-curation.git (commit: 4d8f38adecb21d640295a556a57446018249ab76)...
+[curation] running capsule...
+
+CURATION
+Curating recording: block0_acquisition-ElectricalSeriesRaw_recording1
+Curation query: isi_violations_ratio < 0.5 and presence_ratio > 0.8 and amplitude_cutoff < 0.1
+        Passing default QC: 15 / 16
+Applying noise-neural classifier from SpikeInterface/UnitRefine_noise_neural_classifier
+Applying sua-mua classifier from SpikeInterface/UnitRefine_sua_mua_classifier
+POSTPROCNoise: 0 / 16
+[postproSUA: 15 / 16
+        MUA: 1 / 16
+CURATION time: 23.04s
+[curation] completed!
+executor >  local (8)
+[a6/381ed0] job_dispatch (job-dispatch)               | 1 of 1 ✔
+[7c/8c4380] preprocessing (preprocessing)             | 1 of 1 ✔
+[ea/f8c8fe] spikesort_kilosort4 (spikesort-kilosort4) | 1 of 1 ✔
+[94/7c932c] postprocessing (postprocessing)           | 1 of 1 ✔
+[b2/a56b43] curation (curation)                       | 1 of 1 ✔
+[7f/3b9de7] visualization (visualization)             | 1 of 1 ✔
+[7f/d11288] results_collector (result-collector)      | 0 of 1
+[-        ] quality_control                           -
+[-        ] quality_control_collector                 -
+[aa/a98957] nwb_ecephys (nwb-ecephys)                 | 0 of 1
+[-        ] nwb_units                                 -
+[curation] cloning git repo...
+cloning git repo: https://github.com/AllenNeuralDynamics/aind-ephys-curation.git (commit: 4d8f38adecb21d640295a556a57446018249ab76)...
+[curation] running capsule...
+
+CURATION
+Curating recording: block0_acquisition-ElectricalSeriesRaw_recording1
+Curation query: isi_violations_ratio < 0.5 and presence_ratio > 0.8 and amplitude_cutoff < 0.1
+        Passing default QC: 15 / 16
+Applying noise-neural classifier from SpikeInterface/UnitRefine_noise_neural_classifier
+Applying sua-mua classifier from SpikeInterface/UnitRefine_sua_mua_classifier
+        Noise: 0 / 16
+        SUA: 15 / 16
+        MUA: 1 / 16
+CURATION time: 23.04s
+[curation] completed!
+executor >  local (8)
+[a6/381ed0] job_dispatch (job-dispatch)               | 1 of 1 ✔
+[7c/8c4380] preprocessing (preprocessing)             | 1 of 1 ✔
+[ea/f8c8fe] spikesort_kilosort4 (spikesort-kilosort4) | 1 of 1 ✔
+[94/7c932c] postprocessing (postprocessing)           | 1 of 1 ✔
+[b2/a56b43] curation (curation)                       | 1 of 1 ✔
+[7f/3b9de7] visualization (visualization)             | 1 of 1 ✔
+[7f/d11288] results_collector (result-collector)      | 0 of 1 ✔
+[-        ] quality_control                           -
+[-        ] quality_control_collector                 -
+[aa/a98957] nwb_ecephys (nwb-ecephys)                 | 0 of 1
+[-        ] nwb_units                                 -
+[result-collector] cloning git repo...
+cloning git repo: https://github.com/AllenNeuralDynamics/aind-ephys-results-collector.git (commit: 3964e470f40ad8840f7c90f07f5f812774189220)...
+[result-collector] running capsule...
+
+
+COLLECTING RESULTS
+Loaded session name from JSON files: sample
+Copying preprocessed folders to results:
+        block0_acquisition-ElectricalSeriesRaw_recording1
+        Remapping preprocessed recording JSON paths relative to /mnt/c/Users/xiao/git_repo/aind-ephys-pipeline/sample_dataset/nwb
+        Resolving path for file_path - ../../../../../../sample_dataset/nwb/sample.nwb
+Copying motion folders to results:
+        block0_acquisition-ElectricalSeriesRaw_recording1
+Copying spikesorted folders to results:
+        block0_acquisition-ElectricalSeriesRaw_recording1
+Copying postprocessed and curated folders to results:
+        block0_acquisition-ElectricalSeriesRaw_recording1
+                Remapping recording path for postprocessed to /mnt/c/Users/xiao/git_repo/aind-ephys-pipeline/sample_data
+executor >  local (9)
+[a6/381ed0] job_dispatch (job-dispatch)               | 1 of 1 ✔
+[7c/8c4380] preprocessing (preprocessing)             | 1 of 1 ✔
+[ea/f8c8fe] spikesort_kilosort4 (spikesort-kilosort4) | 1 of 1 ✔
+[94/7c932c] postprocessing (postprocessing)           | 1 of 1 ✔
+[b2/a56b43] curation (curation)                       | 1 of 1 ✔
+[7f/3b9de7] visualization (visualization)             | 1 of 1 ✔
+[7f/d11288] results_collector (result-collector)      | 1 of 1 ✔
+[0c/90ccb9] quality_control (quality-control)         | 0 of 1
+[-        ] quality_control_collector                 -
+[aa/a98957] nwb_ecephys (nwb-ecephys)                 | 0 of 1
+[-        ] nwb_units                                 -
+[result-collector] cloning git repo...
+cloning git repo: https://github.com/AllenNeuralDynamics/aind-ephys-results-collector.git (commit: 3964e470f40ad8840f7c90f07f5f812774189220)...
+[result-collector] running capsule...
+
+
+COLLECTING RESULTS
+Loaded session name from JSON files: sample
+Copying preprocessed folders to results:
+        block0_acquisition-ElectricalSeriesRaw_recording1
+        Remapping preprocessed recording JSON paths relative to /mnt/c/Users/xiao/git_repo/aind-ephys-pipeline/sample_dataset/nwb
+        Resolving path for file_path - ../../../../../../sample_dataset/nwb/sample.nwb
+Copying motion folders to results:
+        block0_acquisition-ElectricalSeriesRaw_recording1
+Copying spikesorted folders to results:
+        block0_acquisition-ElectricalSeriesRaw_recording1
+Copying postprocessed and curated folders to results:
+        block0_acquisition-ElectricalSeriesRaw_recording1
+                Remapping recording path for postprocessed to /mnt/c/Users/xiao/git_repo/aind-ephys-pipeline/sample_data
+executor >  local (10)
+[a6/381ed0] job_dispatch (job-dispatch)               | 1 of 1 ✔
+[7c/8c4380] preprocessing (preprocessing)             | 1 of 1 ✔
+[ea/f8c8fe] spikesort_kilosort4 (spikesort-kilosort4) | 1 of 1 ✔
+[94/7c932c] postprocessing (postprocessing)           | 1 of 1 ✔
+[b2/a56b43] curation (curation)                       | 1 of 1 ✔
+[7f/3b9de7] visualization (visualization)             | 1 of 1 ✔
+[7f/d11288] results_collector (result-collector)      | 1 of 1 ✔
+[0c/90ccb9] quality_control (quality-control)         | 1 of 1 ✔
+[4a/f983cd] quality_control_collector (qc-collector)  | 0 of 1
+[aa/a98957] nwb_ecephys (nwb-ecephys)                 | 0 of 1
+[-        ] nwb_units                                 -
+[result-collector] cloning git repo...
+cloning git repo: https://github.com/AllenNeuralDynamics/aind-ephys-results-collector.git (commit: 3964e470f40ad8840f7c90f07f5f812774189220)...
+[result-collector] running capsule...
+
+
+COLLECTING RESULTS
+Loaded session name from JSON files: sample
+Copying preprocessed folders to results:
+        block0_acquisition-ElectricalSeriesRaw_recording1
+        Remapping preprocessed recording JSON paths relative to /mnt/c/Users/xiao/git_repo/aind-ephys-pipeline/sample_dataset/nwb
+executor >  local (10)
+[a6/381ed0] job_dispatch (job-dispatch)               | 1 of 1 ✔
+[7c/8c4380] preprocessing (preprocessing)             | 1 of 1 ✔
+[ea/f8c8fe] spikesort_kilosort4 (spikesort-kilosort4) | 1 of 1 ✔
+[94/7c932c] postprocessing (postprocessing)           | 1 of 1 ✔
+[b2/a56b43] curation (curation)                       | 1 of 1 ✔
+[7f/3b9de7] visualization (visualization)             | 1 of 1 ✔
+[7f/d11288] results_collector (result-collector)      | 1 of 1 ✔
+[0c/90ccb9] quality_control (quality-control)         | 1 of 1 ✔
+[4a/f983cd] quality_control_collector (qc-collector)  | 0 of 1
+[aa/a98957] nwb_ecephys (nwb-ecephys)                 | 0 of 1
+[-        ] nwb_units                                 -
+[result-collector] cloning git repo...
+cloning git repo: https://github.com/AllenNeuralDynamics/aind-ephys-results-collector.git (commit: 3964e470f40ad8840f7c90f07f5f812774189220)...
+[result-collector] running capsule...
+
+
+COLLECTING RESULTS
+Loaded session name from JSON files: sample
+Copying preprocessed folders to results:
+        block0_acquisition-ElectricalSeriesRaw_recording1
+EPHYS QCRemapping preprocessed recording JSON paths relative to /mnt/c/Users/xiao/git_repo/aind-ephys-pipeline/sample_dataset/nwb
+executor >  local (10)
+[a6/381ed0] job_dispatch (job-dispatch)               | 1 of 1 ✔
+[7c/8c4380] preprocessing (preprocessing)             | 1 of 1 ✔
+[ea/f8c8fe] spikesort_kilosort4 (spikesort-kilosort4) | 1 of 1 ✔
+[94/7c932c] postprocessing (postprocessing)           | 1 of 1 ✔
+[b2/a56b43] curation (curation)                       | 1 of 1 ✔
+[7f/3b9de7] visualization (visualization)             | 1 of 1 ✔
+[7f/d11288] results_collector (result-collector)      | 1 of 1 ✔
+[0c/90ccb9] quality_control (quality-control)         | 1 of 1 ✔
+[4a/f983cd] quality_control_collector (qc-collector)  | 1 of 1 ✔
+[aa/a98957] nwb_ecephys (nwb-ecephys)                 | 0 of 1
+[-        ] nwb_units                                 -
+[result-collector] cloning git repo...
+cloning git repo: https://github.com/AllenNeuralDynamics/aind-ephys-results-collector.git (commit: 3964e470f40ad8840f7c90f07f5f812774189220)...
+[result-collector] running capsule...
+
+
+COLLECTING RESULTS
+Loaded session name from JSON files: sample
+Copying preprocessed folders to results:
+        block0_acquisition-ElectricalSeriesRaw_recording1
+EPHYS QCRemapping preprocessed recording JSON paths relative to /mnt/c/Users/xiao/git_repo/aind-ephys-pipeline/sample_dataset/nwb
+Events fResolving path for file_path - ../../../../../../sample_dataset/nwb/sample.nwb
+Copying motion folders to results:
+Error loblock0_acquisition-ElectricalSeriesRaw_recording1
+Copying spikesorted folders to results:
+No out cblock0_acquisition-ElectricalSeriesRaw_recording1
+Copying postprocessed and curated folders to results:
+No out cblock0_acquisition-ElectricalSeriesRaw_recording1
+Generating NOISERemapping recording path for postprocessed to /mnt/c/Users/xiao/git_repo/aind-ephys-pipeline/sample_dataset/output/postprocessed/block0_acquisition-ElectricalSeriesRaw_recording1.zarr
+GeneratiResolving path for file_path - ../../../../../../../sample_dataset/nwb/sample.nwb
+Copying visualization outputs to results:
+Generating processing metadata
+Generating data_description metadata
+Propagating other metadata files
+COLLECTION time: 71.26s
+[result-collector] completed!
+
+executor >  local (10)
+[a6/381ed0] job_dispatch (job-dispatch)               | 1 of 1 ✔
+[7c/8c4380] preprocessing (preprocessing)             | 1 of 1 ✔
+[ea/f8c8fe] spikesort_kilosort4 (spikesort-kilosort4) | 1 of 1 ✔
+[94/7c932c] postprocessing (postprocessing)           | 1 of 1 ✔
+[b2/a56b43] curation (curation)                       | 1 of 1 ✔
+[7f/3b9de7] visualization (visualization)             | 1 of 1 ✔
+[7f/d11288] results_collector (result-collector)      | 1 of 1 ✔
+[0c/90ccb9] quality_control (quality-control)         | 1 of 1 ✔
+[4a/f983cd] quality_control_collector (qc-collector)  | 1 of 1 ✔
+[aa/a98957] nwb_ecephys (nwb-ecephys)                 | 1 of 1 ✔
+[-        ] nwb_units                                 -
+[nwb-ecephys] cloning git repo...
+cloning git repo: https://github.com/AllenNeuralDynamics/aind-ecephys-nwb.git (commit: fe426c2b9876690ef38c3f52f6e1ac4576dd0fb9)...
+[nwb-ecephys] running capsule...
+
+
+NWB EXPORT ECEPHYS
+Running NWB conversion with the following parameters:
+Stub test: False
+Stub seconds: 10.0
+Write LFP: True
+Write RAW: False
+Temporal subsampling factor: 2
+Spatial subsampling factor: 4
+Highpass filter frequency: 0.1
+Surface channel indices for agar probes:
+NWB backend: zarr
+Found 1 JSON job files
+Session: sample
+Number of NWB files to write: 1
+Number of streams to write for each file: 1
+Creating NWB file with info.
+Processing block0_acquisition-ElectricalSeriesRaw_recording1
+        Loading block0_acquisition-ElectricalSeriesRaw_recording1 from 1 JSON files
+        Collecteblock0_acquisition-ElectricalSeriesRaw_recording1
+        Could not load device information: using default Device
+        Adding LFP data for stream acquisition-ElectricalSeriesRaw from wide-band signal - segment 0
+Could not find Device in surface channel dictionary
+EPHYS QC COLLECTSpatial subsampling factor: 4
+[qc-collector] cTemporal subsampling factor: 2
+                Highpass filter frequency: 0.1
+        Saving preprocessed LFP to binary
+        Adding LFP recording BinaryFolderRecording: 8 channels - 1250.0Hz - 1 segments - 225,000 samples
+                       180.00s (3.00 minutes) - int16 dtype - 3.43 MiB
+Added 1 streams
+Configuring zarr backend
+Writing NWB file to ../results/sample_block0_recording1.nwb
+Writing time: 5.93s
+Done writing ../results/sample_block0_recording1.nwb
+NWB EXPORT ECEPHYS time: 972.52s
+[nwb-ecephys] completed!
+
+
+executor >  local (11)
+[a6/381ed0] job_dispatch (job-dispatch)               | 1 of 1 ✔
+[7c/8c4380] preprocessing (preprocessing)             | 1 of 1 ✔
+[ea/f8c8fe] spikesort_kilosort4 (spikesort-kilosort4) | 1 of 1 ✔
+[94/7c932c] postprocessing (postprocessing)           | 1 of 1 ✔
+[b2/a56b43] curation (curation)                       | 1 of 1 ✔
+[7f/3b9de7] visualization (visualization)             | 1 of 1 ✔
+[7f/d11288] results_collector (result-collector)      | 1 of 1 ✔
+[0c/90ccb9] quality_control (quality-control)         | 1 of 1 ✔
+[4a/f983cd] quality_control_collector (qc-collector)  | 1 of 1 ✔
+[aa/a98957] nwb_ecephys (nwb-ecephys)                 | 1 of 1 ✔
+[48/ec3d50] nwb_units (nwb-units)                     | 0 of 1
+[nwb-ecephys] cloning git repo...
+cloning git repo: https://github.com/AllenNeuralDynamics/aind-ecephys-nwb.git (commit: fe426c2b9876690ef38c3f52f6e1ac4576dd0fb9)...
+[nwb-ecephys] running capsule...
+
+
+NWB EXPORT ECEPHYS
+Running NWB conversion with the following parameters:
+Stub test: False
+Stub seconds: 10.0
+Write LFP: True
+Write RAW: False
+Temporal subsampling factor: 2
+Spatial subsampling factor: 4
+Highpass filter frequency: 0.1
+Surface channel indices for agar probes:
+NWB backend: zarr
+Found 1 JSON job files
+Session: sample
+Number of NWB files to write: 1
+Number of streams to write for each file: 1
+Creating NWB file with info.
+Processing block0_acquisition-ElectricalSeriesRaw_recording1
+        Loading block0_acquisition-ElectricalSeriesRaw_recording1 from 1 JSON files
+                block0_acquisition-ElectricalSeriesRaw_recording1
+        Could not load device information: using default Device
+        Adding LFP data for stream acquisition-ElectricalSeriesRaw from wide-band signal - segment 0
+Could not find Device in surface channel dictionary
+                Spatial subsampling factor: 4
+                Temporal subsampling factor: 2
+                Highpass filter frequency: 0.1
+        Saving preprocessed LFP to binary
+        Adding LFP recording BinaryFolderRecording: 8 channels - 1250.0Hz - 1 segments - 225,000 samples
+                       180.00s (3.00 minutes) - int16 dtype - 3.43 MiB
+Added 1 streams
+Configuring zarr backend
+Writing NWB file to ../results/sample_block0_recording1.nwb
+Writing time: 5.93s
+Done writing ../results/sample_block0_recording1.nwb
+NWB EXPORT ECEPHYS time: 972.52s
+[nwb-ecephys] completed!
+
+
+executor >  local (11)
+[a6/381ed0] job_dispatch (job-dispatch)               | 1 of 1 ✔
+[7c/8c4380] preprocessing (preprocessing)             | 1 of 1 ✔
+[ea/f8c8fe] spikesort_kilosort4 (spikesort-kilosort4) | 1 of 1 ✔
+[94/7c932c] postprocessing (postprocessing)           | 1 of 1 ✔
+[b2/a56b43] curation (curation)                       | 1 of 1 ✔
+[7f/3b9de7] visualization (visualization)             | 1 of 1 ✔
+[7f/d11288] results_collector (result-collector)      | 1 of 1 ✔
+[0c/90ccb9] quality_control (quality-control)         | 1 of 1 ✔
+[4a/f983cd] quality_control_collector (qc-collector)  | 1 of 1 ✔
+[aa/a98957] nwb_ecephys (nwb-ecephys)                 | 1 of 1 ✔
+[48/ec3d50] nwb_units (nwb-units)                     | 1 of 1 ✔
+[nwb-ecephys] cloning git repo...
+cloning git repo: https://github.com/AllenNeuralDynamics/aind-ecephys-nwb.git (commit: fe426c2b9876690ef38c3f52f6e1ac4576dd0fb9)...
+[nwb-ecephys] running capsule...
+
+
+NWB EXPORT ECEPHYS
+Running NWB conversion with the following parameters:
+Stub test: False
+Stub seconds: 10.0
+Write LFP: True
+Write RAW: False
+Temporal subsampling factor: 2
+Spatial subsampling factor: 4
+Highpass filter frequency: 0.1
+Surface channel indices for agar probes:
+NWB backend: zarr
+Found 1 JSON job files
+Session: sample
+executor >  local (11)
+[a6/381ed0] job_dispatch (job-dispatch)               | 1 of 1 ✔
+[7c/8c4380] preprocessing (preprocessing)             | 1 of 1 ✔
+[ea/f8c8fe] spikesort_kilosort4 (spikesort-kilosort4) | 1 of 1 ✔
+[94/7c932c] postprocessing (postprocessing)           | 1 of 1 ✔
+[b2/a56b43] curation (curation)                       | 1 of 1 ✔
+[7f/3b9de7] visualization (visualization)             | 1 of 1 ✔
+[7f/d11288] results_collector (result-collector)      | 1 of 1 ✔
+[0c/90ccb9] quality_control (quality-control)         | 1 of 1 ✔
+[4a/f983cd] quality_control_collector (qc-collector)  | 1 of 1 ✔
+[aa/a98957] nwb_ecephys (nwb-ecephys)                 | 1 of 1 ✔
+[48/ec3d50] nwb_units (nwb-units)                     | 1 of 1 ✔
+[nwb-ecephys] cloning git repo...
+cloning git repo: https://github.com/AllenNeuralDynamics/aind-ecephys-nwb.git (commit: fe426c2b9876690ef38c3f52f6e1ac4576dd0fb9)...
+[nwb-ecephys] running capsule...
+
+
+NWB EXPORT ECEPHYS
+Running NWB conversion with the following parameters:
+Stub test: False
+Stub seconds: 10.0
+Write LFP: True
+Write RAW: False
+Temporal subsampling factor: 2
+Spatial subsampling factor: 4
+Highpass filter frequency: 0.1
+Surface channel indices for agar probes:
+NWB backend: zarr
+Found 1 JSON job files
+Session: sample
+Number of NWB files to write: 1
+Number of streams to write for each file: 1
+Creating NWB file with info.
+Processing block0_acquisition-ElectricalSeriesRaw_recording1
+        Loading block0_acquisition-ElectricalSeriesRaw_recording1 from 1 JSON files
+        Adding 1block0_acquisition-ElectricalSeriesRaw_recording1
+Added 1 Could not load device information: using default Device
+Writing Adding LFP data for stream acquisition-ElectricalSeriesRaw from wide-band signal - segment 0
+Could not find Device in surface channel dictionary
+NWB EXPORT UNITSSpatial subsampling factor: 4
+[nwb-units] compTemporal subsampling factor: 2
+                Highpass filter frequency: 0.1
+        Saving preprocessed LFP to binary
+        Adding LFP recording BinaryFolderRecording: 8 channels - 1250.0Hz - 1 segments - 225,000 samples
+                       180.00s (3.00 minutes) - int16 dtype - 3.43 MiB
+Added 1 streams
+Configuring zarr backend
+Writing NWB file to ../results/sample_block0_recording1.nwb
+Writing time: 5.93s
+Done writing ../results/sample_block0_recording1.nwb
+NWB EXPORT ECEPHYS time: 972.52s
+[nwb-ecephys] completed!
+
+[nwb-units] cloning git repo...
+cloning git repo: https://github.com/AllenNeuralDynamics/aind-units-nwb.git (commit: 32a2afa8f35cb2f3a23983de00cf02e6fdecb051)...
+[nwb-units] running capsule...
+
+
+NWB EXPORT UNITS
+NWB backend: zarr
+Found 1 JSON job files
+Found 1 processed recordings
+Number of NWB files to write: 1
+Number of streams to write for each file: 1
+        Could not load device information: using default Device
+        Adding 16 units from block0_acquisition-ElectricalSeriesRaw_recording1
+Added 1 streams
+Writing time: 10.79s
+Done writing ../results/sample_block0_recording1.nwb
+NWB EXPORT UNITS time: 23.42s
+[nwb-units] completed!
+
+Completed at: 24-Feb-2026 09:45:24
+Duration    : 16m 50s
+CPU hours   : 3.0
+Succeeded   : 11
