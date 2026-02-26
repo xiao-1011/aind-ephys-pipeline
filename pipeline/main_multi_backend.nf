@@ -1,8 +1,8 @@
 #!/usr/bin/env nextflow
 nextflow.enable.dsl = 2
 
-DATA_PATH = params.ecephys_path
-RESULTS_PATH = params.results_path
+// DATA_PATH = params.ecephys_path
+// RESULTS_PATH = params.results_path
 
 
 // Git repository prefix - can be overridden via command line or environment variable

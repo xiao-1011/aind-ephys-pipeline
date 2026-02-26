@@ -1,0 +1,26 @@
+*** NOTE regarding FILE TRANSFERS ***
+Do NOT use the login node for file transfers. Instead use the file
+transfer node:
+ dardel-ftn01.pdc.kth.se
+
+
+     --== Welcome to Dardel! ==--
+=====
+Login
+=====
+ssh xiao1011@dardel.pdc.kth.se
+
+
+ml PDC/24.11
+ml miniconda3/25.3.1-1-cpeGNU-24.11
+ml apptainer/1.4.0-cpeGNU-24.11
+source activate nf-env
+nextflow info
+
+=============
+File transfer
+=============
+scp sample.nwb xiao1011@dardel-ftn01.pdc.kth.se:~/Private/sample_dataset/nwb/sample.nwb
+
+
+
