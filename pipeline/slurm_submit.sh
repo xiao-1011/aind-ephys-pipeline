@@ -11,7 +11,7 @@
 # e.g., using a conda environment with nextflow installed
 
 source activate nf-env
-export NXF_APPTAINER_CACHEDIR="/cfs/klemming/projects/supr/dmclab/apptainer_cache"
+export NXF_APPTAINER_CACHEDIR="/cfs/klemming/projects/supr/dmclab/apptainer_cachedir"
 
 PIPELINE_PATH="$HOME/Private/aind-ephys-pipeline"
 DATA_PATH="$HOME/Private/sample_dataset/nwb"
