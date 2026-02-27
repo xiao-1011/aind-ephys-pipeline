@@ -19,6 +19,8 @@ RESULTS_PATH="$HOME/Private/sample_dataset/output"
 PARAMS_FILE="$PIPELINE_PATH/pipeline/active_params.json"
 WORKDIR="$HOME/Private/aind-ephys-pipeline/pipeline"
 
+export DATA_PATH RESULTS_PATH PARAMS_FILE
+
 # check if nextflow_local_custom.config exists
 if [ -f "$PIPELINE_PATH/pipeline/nextflow_slurm_custom.config" ]; then
     CONFIG_FILE="$PIPELINE_PATH/pipeline/nextflow_slurm_custom.config"
@@ -27,9 +29,9 @@ else
 fi
 echo "Using config file: $CONFIG_FILE"
 
-DATA_PATH=$DATA_PATH RESULTS_PATH=$RESULTS_PATH PARAMS_FILE=$PARAMS_FILE nextflow \
+nextflow \
     -C $CONFIG_FILE \
     -log $RESULTS_PATH/nextflow/nextflow.log \
     run $PIPELINE_PATH/pipeline/main_multi_backend.nf \
-    -work-dir $WORKDIR
-    # additional parameters here
+    -work-dir $WORKDIR \
+    --params_file $PARAMS_FILE
