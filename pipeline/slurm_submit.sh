@@ -16,6 +16,7 @@ export NXF_APPTAINER_CACHEDIR="/cfs/klemming/projects/supr/dmclab/apptainer_cach
 PIPELINE_PATH="$HOME/Private/aind-ephys-pipeline"
 DATA_PATH="$HOME/Private/sample_dataset/nwb"
 RESULTS_PATH="$HOME/Private/sample_dataset/output"
+PARAMS_FILE="$PIPELINE_PATH/pipeline/active_params.json"
 WORKDIR="$HOME/Private/aind-ephys-pipeline/pipeline"
 
 # check if nextflow_local_custom.config exists
@@ -26,7 +27,7 @@ else
 fi
 echo "Using config file: $CONFIG_FILE"
 
-DATA_PATH=$DATA_PATH RESULTS_PATH=$RESULTS_PATH nextflow \
+DATA_PATH=$DATA_PATH RESULTS_PATH=$RESULTS_PATH PARAMS_FILE=$PARAMS_FILE nextflow \
     -C $CONFIG_FILE \
     -log $RESULTS_PATH/nextflow/nextflow.log \
     run $PIPELINE_PATH/pipeline/main_multi_backend.nf \
