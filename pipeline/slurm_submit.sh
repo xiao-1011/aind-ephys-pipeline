@@ -13,6 +13,7 @@
 source activate nf-env
 export NXF_APPTAINER_CACHEDIR="/cfs/klemming/projects/supr/dmclab/apptainer_cachedir"
 export NUMBA_CACHE_DIR="/cfs/klemming/projects/supr/dmclab/numba_cachedir"
+export HF_HOME="/cfs/klemming/projects/supr/dmclab/hf_cachedir"
 
 PIPELINE_PATH="$HOME/Private/aind-ephys-pipeline"
 DATA_PATH="$HOME/Private/sample_dataset/nwb"
