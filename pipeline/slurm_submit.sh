@@ -4,7 +4,6 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH -J spikesortingnf_dmc
-#SBATCH -p shared
 
 
 # modify this section to make the nextflow command available to your environment
