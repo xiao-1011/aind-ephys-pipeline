@@ -1,7 +1,7 @@
 # KiloSort4 container for ARM64 (NVIDIA GH200 / Grace Hopper)
 #
 # Build on Dardel gh node:
-#   apptainer build --squashfs-opts "-comp lz4" \
+#   apptainer build --mksquashfs-args "-comp lz4" \
 #     /cfs/klemming/projects/supr/dmclab/apptainer_cachedir/kilosort4-arm.sif \
 #     kilosort4-arm.def
 #
