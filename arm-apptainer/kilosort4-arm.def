@@ -29,10 +29,6 @@ From: nvcr.io/nvidia/pytorch:26.02-py3
         aind-data-schema==2.4.0 \
         aind-log-utils==0.2.3
 
-    # Check fftw3 availability (visible in build log)
-    echo "--- fftw3 check ---"
-    find /usr -name "*fftw*" 2>/dev/null || echo "fftw3 not found"
-
 %environment
     export DEBIAN_FRONTEND=noninteractive
 
