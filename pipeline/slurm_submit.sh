@@ -11,6 +11,9 @@
 # e.g., using a conda environment with nextflow installed
 
 source activate nf-env
+NF_BIN="$(which nextflow)"
+source deactivate
+
 export NXF_APPTAINER_CACHEDIR="/cfs/klemming/projects/supr/dmclab/apptainer_cachedir"
 export NUMBA_CACHE_DIR="/cfs/klemming/projects/supr/dmclab/numba_cachedir"
 export HF_HOME="/cfs/klemming/projects/supr/dmclab/hf_cachedir"
@@ -33,7 +36,7 @@ else
 fi
 echo "Using config file: $CONFIG_FILE"
 
-nextflow \
+$NF_BIN \
     -C $CONFIG_FILE \
     -log $RESULTS_PATH/nextflow/nextflow.log \
     run $PIPELINE_PATH/pipeline/main_multi_backend.nf \
