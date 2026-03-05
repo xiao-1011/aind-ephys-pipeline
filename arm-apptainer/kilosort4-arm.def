@@ -1,0 +1,29 @@
+Bootstrap: docker
+From: nvcr.io/nvidia/pytorch:26.02-py3
+
+%labels
+    Author aind-ephys-pipeline
+    Architecture aarch64 (GH200 / Grace Hopper)
+    KiloSort4Version 4.0.38
+    SpikeInterfaceVersion 0.103.0
+
+%post
+    export DEBIAN_FRONTEND=noninteractive
+
+    # FFTW for CPU-side FFT operations
+    apt-get update && apt-get install -y --no-install-recommends \
+        libfftw3-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+    # Core spike-sorting stack
+    pip install --no-cache-dir \
+        kilosort==4.0.38 \
+        spikeinterface[full]==0.103.0 \
+        aind-data-schema==2.4.0 \
+        aind-log-utils==0.2.3
+
+%environment
+    export DEBIAN_FRONTEND=noninteractive
+
+%runscript
+    exec python "$@"
