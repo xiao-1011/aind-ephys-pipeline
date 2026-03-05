@@ -12,6 +12,8 @@
 
 source activate nf-env
 NF_BIN="$(which nextflow)"
+export JAVA_HOME="$CONDA_PREFIX"
+export JAVA_CMD="$CONDA_PREFIX/bin/java"
 source deactivate
 
 export NXF_APPTAINER_CACHEDIR="/cfs/klemming/projects/supr/dmclab/apptainer_cachedir"
