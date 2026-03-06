@@ -25,8 +25,8 @@ export MPLCONFIGDIR="/cfs/klemming/projects/supr/dmclab/matplotlib_cachedir"
 export KACHERY_DIR="/cfs/klemming/projects/supr/dmclab/kachery_cachedir"
 
 PIPELINE_PATH="$HOME/Private/aind-ephys-pipeline"
-DATA_PATH="$HOME/cfs/klemming/projects/supr/dmclab/xiao/SGL_DATA/vr1320251126_g0"
-RESULTS_PATH="$HOME/cfs/klemming/projects/supr/dmclab/xiao/output/vr1320251126_g0_output"
+DATA_PATH="$HOME/cfs/klemming/projects/supr/dmclab/xiao/SGL_DATA/vr1320251126_g0_imec0"
+RESULTS_PATH="$HOME/cfs/klemming/projects/supr/dmclab/xiao/output/vr1320251126_g0"
 PARAMS_FILE="$PIPELINE_PATH/pipeline/active_params.json"
 WORKDIR="$HOME/Private/aind-ephys-pipeline/pipeline/work"
 
