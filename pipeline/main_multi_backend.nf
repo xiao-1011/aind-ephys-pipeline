@@ -50,21 +50,15 @@ params_keys = params.keySet()
 if (!params_keys.contains('executor')) {
     params.executor = "local"
 }
-// set global n_jobs for local executor
-if (params.executor == "local") 
-{
-    if ("n_jobs" in params_keys) {
-        n_jobs = params.n_jobs
-    }
-    else {
-        n_jobs = -1
-    }
-    println "N JOBS: ${n_jobs}"
-    job_args=" --n-jobs ${n_jobs}"
+// set global n_jobs
+if ("n_jobs" in params_keys) {
+    n_jobs = params.n_jobs
 }
 else {
-    job_args=""
+    n_jobs = -1
 }
+println "N JOBS: ${n_jobs}"
+job_args=" --n-jobs ${n_jobs}"
 
 // set runmode
 if ("runmode" in params_keys) {
