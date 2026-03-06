@@ -28,7 +28,7 @@ PIPELINE_PATH="$HOME/Private/aind-ephys-pipeline"
 DATA_PATH="$HOME/cfs/klemming/projects/supr/dmclab/xiao/SGL_DATA/vr1320251126_g0"
 RESULTS_PATH="$HOME/cfs/klemming/projects/supr/dmclab/xiao/output/vr1320251126_g0_output"
 PARAMS_FILE="$PIPELINE_PATH/pipeline/active_params.json"
-WORKDIR="$HOME/Private/aind-ephys-pipeline/pipeline"
+WORKDIR="$HOME/Private/aind-ephys-pipeline/pipeline/work"
 
 export DATA_PATH RESULTS_PATH PARAMS_FILE
 
