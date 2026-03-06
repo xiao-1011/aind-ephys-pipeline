@@ -45,4 +45,5 @@ $NF_BIN \
     -log $RESULTS_PATH/nextflow/nextflow.log \
     run $PIPELINE_PATH/pipeline/main_multi_backend.nf \
     -work-dir $WORKDIR \
-    --params_file $PARAMS_FILE
+    --params_file $PARAMS_FILE \
+    --n_jobs 16
