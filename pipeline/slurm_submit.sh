@@ -10,11 +10,13 @@
 # modify this section to make the nextflow command available to your environment
 # e.g., using a conda environment with nextflow installed
 
+CLEAN_PATH="$PATH"
 source activate nf-env
 NF_BIN="$(which nextflow)"
 export JAVA_HOME="$CONDA_PREFIX"
 export JAVA_CMD="$CONDA_PREFIX/bin/java"
 source deactivate
+export PATH="$CLEAN_PATH"
 
 export NXF_APPTAINER_CACHEDIR="/cfs/klemming/projects/supr/dmclab/apptainer_cachedir"
 export NUMBA_CACHE_DIR="/cfs/klemming/projects/supr/dmclab/numba_cachedir"
