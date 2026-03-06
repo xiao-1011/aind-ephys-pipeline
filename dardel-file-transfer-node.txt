@@ -22,5 +22,14 @@ File transfer
 =============
 scp sample.nwb xiao1011@dardel-ftn01.pdc.kth.se:~/Private/sample_dataset/nwb/sample.nwb
 
+===================
+Interactive session
+===================
+salloc -A naiss2026-3-127-gh -p gpugh -t 02:00:00 -n 1 -c 10 --gpus=1
+srun --pty bash
 
-
+==============
+Terminate task
+==============
+sacct -u $USER --format=JobID,Elapsed,AllocCPUS,State
+scancel -u $USER
