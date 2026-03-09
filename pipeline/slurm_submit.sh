@@ -46,4 +46,4 @@ $NF_BIN \
     run $PIPELINE_PATH/pipeline/main_multi_backend.nf \
     -work-dir $WORKDIR \
     --params_file $PARAMS_FILE \
-    --n_jobs 8
+    --n_jobs 1
