@@ -28,7 +28,7 @@ PIPELINE_PATH="$HOME/Private/aind-ephys-pipeline"
 DATA_PATH="/cfs/klemming/projects/supr/dmclab/xiao/SGL_DATA/vr1320251126_g0"
 RESULTS_PATH="/cfs/klemming/projects/supr/dmclab/xiao/output/vr1320251126_g0"
 PARAMS_FILE="$PIPELINE_PATH/pipeline/active_params.json"
-WORKDIR="$HOME/Private/aind-ephys-pipeline/pipeline/work"
+WORKDIR="/cfs/klemming/projects/supr/dmclab/xiao/nextflow_work"
 
 export DATA_PATH RESULTS_PATH PARAMS_FILE
 
@@ -46,4 +46,4 @@ $NF_BIN \
     run $PIPELINE_PATH/pipeline/main_multi_backend.nf \
     -work-dir $WORKDIR \
     --params_file $PARAMS_FILE \
-    --n_jobs 1
+    --n_jobs 16
