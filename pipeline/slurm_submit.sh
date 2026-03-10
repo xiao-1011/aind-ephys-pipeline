@@ -15,8 +15,7 @@ date
 # Load conda environment
 ############################
 
-source "$(conda info --base)/etc/profile.d/conda.sh"
-conda activate /cfs/klemming/projects/supr/dmclab/envs/aind-ephys
+source activate /cfs/klemming/projects/supr/dmclab/envs/aind-ephys
 
 export JAVA_HOME="$CONDA_PREFIX"
 export JAVA_CMD="$CONDA_PREFIX/bin/java"
