@@ -393,7 +393,7 @@
                 "matching": {"method": "wobble"},
                 "apply_preprocessing": false,
                 "templates_from_svd": true,
-                "cache_preprocessing": {"mode": "no-cache", "memory_limit": 0.5, "delete_cache": true},
+                "cache_preprocessing": {"mode": "memory", "memory_limit": 0.5, "delete_cache": true},
                 "multi_units_only": false,
                 "job_kwargs": {"n_jobs": 0.9},
                 "seed": 42,

@@ -1,0 +1,1139 @@
+Using config file: /cfs/klemming/home/x/xiao1011/Private/aind-ephys-pipeline/pipeline/nextflow_slurm.config
+
+ N E X T F L O W   ~  version 25.10.4
+
+Launching `/cfs/klemming/home/x/xiao1011/Private/aind-ephys-pipeline/pipeline/main_multi_backend.nf` [backstabbing_lattes] DSL2 - revision: b130c1f48f
+
+DATA_PATH: /cfs/klemming/projects/supr/dmclab/xiao/SGL_DATA/vr1320251126_g0
+RESULTS_PATH: /cfs/klemming/projects/supr/dmclab/xiao/output/vr1320251126_g0
+Loaded parameters from /cfs/klemming/home/x/xiao1011/Private/aind-ephys-pipeline/pipeline/active_params.json
+PARAMS: [executor:slurm, ecephys_path:/cfs/klemming/projects/supr/dmclab/xiao/SGL_DATA/vr1320251126_g0, results_path:/cfs/klemming/projects/supr/dmclab/xiao/output/vr1320251126_g0, params_file:/cfs/klemming/home/x/xiao1011/Private/aind-ephys-pipeline/pipeline/active_params.json, default_queue:main, gpu_queue:gpugh, n_jobs:16, git_repo_prefix:https://github.com/AllenNeuralDynamics/aind-]
+CONTAINER TAG: si-0.103.0
+N JOBS: 16
+Using RUNMODE: full
+Using parameters from JSON file: /cfs/klemming/home/x/xiao1011/Private/aind-ephys-pipeline/pipeline/active_params.json
+No sorter specified, defaulting to kilosort4
+Using SORTER: kilosort4 with args: 
+[-        ] job_dispatch              -
+[-        ] preprocessing             -
+[-        ] spikesort_kilosort4       -
+[-        ] postprocessing            -
+[-        ] curation                  -
+[-        ] visualization             -
+[-        ] results_collector         -
+[-        ] quality_control           -
+[-        ] quality_control_collector -
+
+[-        ] job_dispatch              | 0 of 1
+[-        ] preprocessing             -
+[-        ] spikesort_kilosort4       -
+[-        ] postprocessing            -
+[-        ] curation                  -
+[-        ] visualization             -
+[-        ] results_collector         -
+[-        ] quality_control           -
+[-        ] quality_control_collector -
+[-        ] nwb_ecephys               -
+[-        ] nwb_units                 -
+
+executor >  slurm (1)
+[6a/45e86f] job_dispatch (job-dispatch) | 0 of 1
+[-        ] preprocessing               -
+[-        ] spikesort_kilosort4         -
+[-        ] postprocessing              -
+[-        ] curation                    -
+[-        ] visualization               -
+[-        ] results_collector           -
+[-        ] quality_control             -
+[-        ] quality_control_collector   -
+[-        ] nwb_ecephys                 -
+[-        ] nwb_units                   -
+
+executor >  slurm (1)
+[6a/45e86f] job_dispatch (job-dispatch) | 0 of 1
+[-        ] preprocessing               -
+[-        ] spikesort_kilosort4         -
+[-        ] postprocessing              -
+[-        ] curation                    -
+[-        ] visualization               -
+[-        ] results_collector           -
+[-        ] quality_control             -
+[-        ] quality_control_collector   -
+[-        ] nwb_ecephys                 -
+[-        ] nwb_units                   -
+
+executor >  slurm (3)
+[6a/45e86f] job_dispatch (job-dispatch)   | 1 of 1 ✔
+[ad/8a9e38] preprocessing (preprocessing) | 0 of 4
+[-        ] spikesort_kilosort4           -
+[-        ] postprocessing                -
+[-        ] curation                      -
+[-        ] visualization                 -
+[-        ] results_collector             -
+[-        ] quality_control               -
+[-        ] quality_control_collector     -
+[-        ] nwb_ecephys                   | 0 of 1
+[-        ] nwb_units                     -
+Max recording duration: 40min
+[job-dispatch] allocated task time: 1h
+[job-dispatch] cloning git repo...
+cloning git repo: https://github.com/AllenNeuralDynamics/aind-ephys-job-dispatch.git (commit: 421cce9e965faa09e7a88424118129b5f0db7dc5)...
+[job-dispatch] running capsule...
+Running job dispatcher with the following parameters:
+        SPLIT SEGMENTS: True
+        SPLIT GROUPS: True
+        DEBUG: False
+        DEBUG DURATION: 30.0
+        SKIP TIMESTAMPS CHECK: False
+        MULTI SESSION: False
+        INPUT: spikeglx
+        MIN_RECORDING_DURATION: -1
+Parsing spikeglx input folder
+        Session name: ecephys_session
+        Num. streams: 2
+                No LFP stream found for imec0.ap
+Recording to be processed in parallel:
+        block0_imec0.ap_recording1_group0
+                Duration 2413.87 s - Num. channels: 96
+        block0_imec0.ap_recording1_group1
+                Duration 2413.87 s - Num. channels: 96
+        block0_imec0.ap_recording1_group2
+                Duration 2413.87 s - Num. channels: 96
+        block0_imec0.ap_recording1_group3
+                Duration 2413.87 s - Num. channels: 96
+Generated 4 job config files
+[job-dispatch] completed!
+
+
+executor >  slurm (6)
+[6a/45e86f] job_dispatch (job-dispatch)   | 1 of 1 ✔
+[db/886979] preprocessing (preprocessing) | 0 of 4
+[-        ] spikesort_kilosort4           -
+[-        ] postprocessing                -
+[-        ] curation                      -
+[-        ] visualization                 -
+[-        ] results_collector             -
+[-        ] quality_control               -
+[-        ] quality_control_collector     -
+[eb/17c97d] nwb_ecephys (nwb-ecephys)     | 0 of 1
+[-        ] nwb_units                     -
+Max recording duration: 40min
+[job-dispatch] allocated task time: 1h
+[job-dispatch] cloning git repo...
+cloning git repo: https://github.com/AllenNeuralDynamics/aind-ephys-job-dispatch.git (commit: 421cce9e965faa09e7a88424118129b5f0db7dc5)...
+[job-dispatch] running capsule...
+Running job dispatcher with the following parameters:
+        SPLIT SEGMENTS: True
+        SPLIT GROUPS: True
+        DEBUG: False
+        DEBUG DURATION: 30.0
+        SKIP TIMESTAMPS CHECK: False
+        MULTI SESSION: False
+        INPUT: spikeglx
+        MIN_RECORDING_DURATION: -1
+Parsing spikeglx input folder
+        Session name: ecephys_session
+        Num. streams: 2
+                No LFP stream found for imec0.ap
+Recording to be processed in parallel:
+        block0_imec0.ap_recording1_group0
+                Duration 2413.87 s - Num. channels: 96
+        block0_imec0.ap_recording1_group1
+                Duration 2413.87 s - Num. channels: 96
+        block0_imec0.ap_recording1_group2
+                Duration 2413.87 s - Num. channels: 96
+        block0_imec0.ap_recording1_group3
+                Duration 2413.87 s - Num. channels: 96
+Generated 4 job config files
+[job-dispatch] completed!
+
+
+executor >  slurm (6)
+[6a/45e86f] job_dispatch (job-dispatch)   | 1 of 1 ✔
+[db/886979] preprocessing (preprocessing) | 0 of 4
+[-        ] spikesort_kilosort4           -
+[-        ] postprocessing                -
+[-        ] curation                      -
+[-        ] visualization                 -
+[-        ] results_collector             -
+[-        ] quality_control               -
+[-        ] quality_control_collector     -
+[eb/17c97d] nwb_ecephys (nwb-ecephys)     | 0 of 1
+[-        ] nwb_units                     -
+Max recording duration: 40min
+[job-dispatch] allocated task time: 1h
+[job-dispatch] cloning git repo...
+cloning git repo: https://github.com/AllenNeuralDynamics/aind-ephys-job-dispatch.git (commit: 421cce9e965faa09e7a88424118129b5f0db7dc5)...
+[job-dispatch] running capsule...
+Running job dispatcher with the following parameters:
+        SPLIT SEGMENTS: True
+        SPLIT GROUPS: True
+        DEBUG: False
+        DEBUG DURATION: 30.0
+        SKIP TIMESTAMPS CHECK: False
+        MULTI SESSION: False
+        INPUT: spikeglx
+        MIN_RECORDING_DURATION: -1
+Parsing spikeglx input folder
+        Session name: ecephys_session
+        Num. streams: 2
+                No LFP stream found for imec0.ap
+Recording to be processed in parallel:
+        block0_imec0.ap_recording1_group0
+                Duration 2413.87 s - Num. channels: 96
+        block0_imec0.ap_recording1_group1
+                Duration 2413.87 s - Num. channels: 96
+        block0_imec0.ap_recording1_group2
+                Duration 2413.87 s - Num. channels: 96
+        block0_imec0.ap_recording1_group3
+                Duration 2413.87 s - Num. channels: 96
+Generated 4 job config files
+[job-dispatch] completed!
+
+
+executor >  slurm (6)
+[6a/45e86f] job_dispatch (job-dispatch)   | 1 of 1 ✔
+[db/886979] preprocessing (preprocessing) | 0 of 4
+[-        ] spikesort_kilosort4           -
+[-        ] postprocessing                -
+[-        ] curation                      -
+[-        ] visualization                 -
+[-        ] results_collector             -
+[-        ] quality_control               -
+[-        ] quality_control_collector     -
+[eb/17c97d] nwb_ecephys (nwb-ecephys)     | 1 of 1 ✔
+[-        ] nwb_units                     -
+[nwb-ecephys] allocated task time: 1h 20m
+[nwb-ecephys] cloning git repo...
+cloning git repo: https://github.com/AllenNeuralDynamics/aind-ecephys-nwb.git (commit: fe426c2b9876690ef38c3f52f6e1ac4576dd0fb9)...
+[nwb-ecephys] running capsule...
+
+
+NWB EXPORT ECEPHYS
+Running NWB conversion with the following parameters:
+Stub test: False
+Stub seconds: 10.0
+Write LFP: True
+Write RAW: False
+Temporal subsampling factor: 2
+Spatial subsampling factor: 4
+Highpass filter frequency: 0.1
+Surface channel indices for agar probes:
+NWB backend: zarr
+Found 4 JSON job files
+Session: ecephys_session
+Number of NWB files to write: 1
+Number of streams to write for each file: 1
+Failed to create base NWB file from metadata.
+Creating NWB file with info.
+Processing block0_imec0.ap_recording1
+        Loading block0_imec0.ap_recording1 from 4 JSON files
+                block0_imec0.ap_recording1_group0
+                block0_imec0.ap_recording1_group1
+                block0_imec0.ap_recording1_group2
+                block0_imec0.ap_recording1_group3
+                Aggregating channels from 4 groups
+        Added probe device: NP2013 from recording metadata
+        Adding LFP data for stream imec0.ap from wide-band signal - segment 0
+Could not find NP2013 in surface channel dictionary
+                Spatial subsampling factor: 4
+                Temporal subsampling factor: 2
+                Highpass filter frequency: 0.1
+        Saving preprocessed LFP to binary
+        Adding LFP recording BinaryFolderRecording: 96 channels - 1250.0Hz - 1 segments - 3,016,250 samples
+                       2,413.00s (40.22 minutes) - int16 dtype - 552.29 MiB
+Added 1 streams
+Configuring zarr backend
+Writing NWB file to ../results/ecephys_session_block0_recording1.nwb
+Writing time: 20.81s
+Done writing ../results/ecephys_session_block0_recording1.nwb
+NWB EXPORT ECEPHYS time: 623.78s
+[nwb-ecephys] completed!
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+executor >  slurm (8)
+[6a/45e86f] job_dispatch (job-dispatch)    | 1 of 1 ✔
+[db/886979] preprocessing (preprocessing)  | 4 of 4 ✔
+[d5/3b5da2] spi…ort4 (spikesort-kilosort4) | 0 of 4
+[-        ] postprocessing                 -
+[-        ] curation                       -
+[-        ] visualization                  -
+[-        ] results_collector              -
+[-        ] quality_control                -
+[-        ] quality_control_collector      -
+[eb/17c97d] nwb_ecephys (nwb-ecephys)      | 1 of 1 ✔
+[-        ] nwb_units                      -
+[nwb-ecephys] allocated task time: 1h 20m
+[nwb-ecephys] cloning git repo...
+cloning git repo: https://github.com/AllenNeuralDynamics/aind-ecephys-nwb.git (commit: fe426c2b9876690ef38c3f52f6e1ac4576dd0fb9)...
+[nwb-ecephys] running capsule...
+
+
+NWB EXPORT ECEPHYS
+Running NWB conversion with the following parameters:
+Stub test: False
+Stub seconds: 10.0
+Write LFP: True
+Write RAW: False
+Temporal subsampling factor: 2
+Spatial subsampling factor: 4
+Highpass filter frequency: 0.1
+Surface channel indices for agar probes:
+NWB backend: zarr
+Found 4 JSON job files
+Session: ecephys_session
+Number of NWB files to write: 1
+Number of streams to write for each file: 1
+Failed to create base NWB file from metadata.
+Creating NWB file with info.
+Processing block0_imec0.ap_recording1
+        Loading block0_imec0.ap_recording1 from 4 JSON files
+                block0_imec0.ap_recording1_group0
+                block0_imec0.ap_recording1_group1
+                block0_imec0.ap_recording1_group2
+                block0_imec0.ap_recording1_group3
+                Aggregating channels from 4 groups
+        Added probe device: NP2013 from recording metadata
+        Adding LFP data for stream imec0.ap from wide-band signal - segment 0
+Could not find NP2013 in surface channel dictionary
+                Spatial subsampling factor: 4
+                Temporal subsampling factor: 2
+                Highpass filter frequency: 0.1
+        Saving preprocessed LFP to binary
+        Adding LFP recording BinaryFolderRecording: 96 channels - 1250.0Hz - 1 segments - 3,016,250 samples
+                       2,413.00s (40.22 minutes) - int16 dtype - 552.29 MiB
+Added 1 streams
+Configuring zarr backend
+Writing NWB file to ../results/ecephys_session_block0_recording1.nwb
+Writing time: 20.81s
+Done writing ../results/ecephys_session_block0_recording1.nwb
+NWB EXPORT ECEPHYS time: 623.78s
+[nwb-ecephys] completed!
+
+[preprocessing] allocated task time: 2h 40m
+[preprocessing] cloning git repo...
+cloning git repo: https://github.com/AllenNeuralDynamics/aind-ephys-preprocessing.git (commit: 9ef7b85c6d76ba84083f54e043ffe792ea16faa4)...
+[preprocessing] running capsule...
+Running preprocessing with the following parameters:
+        DENOISING_STRATEGY: cmr
+        FILTER TYPE: highpass
+        REMOVE_OUT_CHANNELS: True
+        REMOVE_BAD_CHANNELS: True
+        MAX BAD CHANNEL FRACTION: 0.5
+        COMPUTE_MOTION: True
+        APPLY_MOTION: False
+        MOTION PRESET: dredge_fast
+        MOTION TEMPORAL BIN S: 1
+        T_START: None
+        T_STOP: None
+        MIN_DURATION FOR PREPROCESSING: 120
+        N_JOBS: 16
+Found 1 configurations
+
+
+PREPROCESSING
+Preprocessing recording: ecephys_session - block0_imec0.ap_recording1_group1
+        Duration: 2413.87 s
+        Bad channel detection:
+                - dead channels - 3
+                - noise channels - 0
+                - out channels - 0
+        Removing 0 out channels
+        Removing 3 channels after cmr preprocessing
+write_binary_recording
+engine=process - n_jobs=16 - samples_per_chunk=30,000 - chunk_memory=5.32 MiB - total_memory=85.14 MiB - chunk_duration=1.00s
+        Computing motion correction with preset: dredge_fast
+                Using bin_s: 1
+                Using win_step_um: 142.5
+                Using win_scale_um: 142.5
+        Motion computed successfully!
+PREPROCESSING time: 637.6s
+[preprocessing] completed!
+
+[preprocessing] allocated task time: 2h 40m
+[preprocessing] cloning git repo...
+cloning git repo: https://github.com/AllenNeuralDynamics/aind-ephys-preprocessing.git (commit: 9ef7b85c6d76ba84083f54e043ffe792ea16faa4)...
+[preprocessing] running capsule...
+Running preprocessing with the following parameters:
+        DENOISING_STRATEGY: cmr
+        FILTER TYPE: highpass
+        REMOVE_OUT_CHANNELS: True
+        REMOVE_BAD_CHANNELS: True
+        MAX BAD CHANNEL FRACTION: 0.5
+        COMPUTE_MOTION: True
+        APPLY_MOTION: False
+        MOTION PRESET: dredge_fast
+        MOTION TEMPORAL BIN S: 1
+        T_START: None
+        T_STOP: None
+        MIN_DURATION FOR PREPROCESSING: 120
+        N_JOBS: 16
+Found 1 configurations
+
+
+PREPROCESSING
+Preprocessing recording: ecephys_session - block0_imec0.ap_recording1_group3
+        Duration: 2413.87 s
+        Bad channel detection:
+                - dead channels - 7
+                - noise channels - 0
+                - out channels - 0
+        Removing 0 out channels
+        Removing 7 channels after cmr preprocessing
+write_binary_recording
+engine=process - n_jobs=16 - samples_per_chunk=30,000 - chunk_memory=5.09 MiB - total_memory=81.48 MiB - chunk_duration=1.00s
+        Computing motion correction with preset: dredge_fast
+                Using bin_s: 1
+                Using win_step_um: 142.5
+                Using win_scale_um: 142.5
+        Motion computed successfully!
+PREPROCESSING time: 637.41s
+[preprocessing] completed!
+
+[preprocessing] allocated task time: 2h 40m
+[preprocessing] cloning git repo...
+cloning git repo: https://github.com/AllenNeuralDynamics/aind-ephys-preprocessing.git (commit: 9ef7b85c6d76ba84083f54e043ffe792ea16faa4)...
+[preprocessing] running capsule...
+Running preprocessing with the following parameters:
+        DENOISING_STRATEGY: cmr
+        FILTER TYPE: highpass
+        REMOVE_OUT_CHANNELS: True
+        REMOVE_BAD_CHANNELS: True
+        MAX BAD CHANNEL FRACTION: 0.5
+        COMPUTE_MOTION: True
+        APPLY_MOTION: False
+        MOTION PRESET: dredge_fast
+        MOTION TEMPORAL BIN S: 1
+        T_START: None
+        T_STOP: None
+        MIN_DURATION FOR PREPROCESSING: 120
+        N_JOBS: 16
+Found 1 configurations
+
+
+PREPROCESSING
+Preprocessing recording: ecephys_session - block0_imec0.ap_recording1_group2
+        Duration: 2413.87 s
+        Bad channel detection:
+                - dead channels - 1
+                - noise channels - 0
+                - out channels - 0
+        Removing 0 out channels
+        Removing 1 channels after cmr preprocessing
+write_binary_recording
+engine=process - n_jobs=16 - samples_per_chunk=30,000 - chunk_memory=5.44 MiB - total_memory=86.98 MiB - chunk_duration=1.00s
+        Computing motion correction with preset: dredge_fast
+                Using bin_s: 1
+                Using win_step_um: 142.5
+                Using win_scale_um: 142.5
+        Motion computed successfully!
+PREPROCESSING time: 639.26s
+[preprocessing] completed!
+
+[preprocessing] allocated task time: 2h 40m
+[preprocessing] cloning git repo...
+cloning git repo: https://github.com/AllenNeuralDynamics/aind-ephys-preprocessing.git (commit: 9ef7b85c6d76ba84083f54e043ffe792ea16faa4)...
+[preprocessing] running capsule...
+Running preprocessing with the following parameters:
+        DENOISING_STRATEGY: cmr
+        FILTER TYPE: highpass
+        REMOVE_OUT_CHANNELS: True
+        REMOVE_BAD_CHANNELS: True
+        MAX BAD CHANNEL FRACTION: 0.5
+        COMPUTE_MOTION: True
+        APPLY_MOTION: False
+        MOTION PRESET: dredge_fast
+        MOTION TEMPORAL BIN S: 1
+        T_START: None
+        T_STOP: None
+        MIN_DURATION FOR PREPROCESSING: 120
+        N_JOBS: 16
+Found 1 configurations
+
+
+PREPROCESSING
+Preprocessing recording: ecephys_session - block0_imec0.ap_recording1_group0
+        Duration: 2413.87 s
+        Bad channel detection:
+                - dead channels - 3
+                - noise channels - 0
+                - out channels - 0
+        Removing 0 out channels
+        Removing 3 channels after cmr preprocessing
+write_binary_recording
+engine=process - n_jobs=16 - samples_per_chunk=30,000 - chunk_memory=5.32 MiB - total_memory=85.14 MiB - chunk_duration=1.00s
+        Computing motion correction with preset: dredge_fast
+                Using bin_s: 1
+                Using win_step_um: 142.5
+                Using win_scale_um: 142.5
+        Motion computed successfully!
+PREPROCESSING time: 640.02s
+[preprocessing] completed!
+
+
+executor >  slurm (10)
+[6a/45e86f] job_dispatch (job-dispatch)    | 1 of 1 ✔
+[db/886979] preprocessing (preprocessing)  | 4 of 4 ✔
+[75/3a74b5] spi…ort4 (spikesort-kilosort4) | 0 of 4
+[-        ] postprocessing                 -
+[-        ] curation                       -
+[-        ] visualization                  -
+[-        ] results_collector              -
+[-        ] quality_control                -
+[-        ] quality_control_collector      -
+[eb/17c97d] nwb_ecephys (nwb-ecephys)      | 1 of 1 ✔
+[-        ] nwb_units                      -
+[nwb-ecephys] allocated task time: 1h 20m
+[nwb-ecephys] cloning git repo...
+cloning git repo: https://github.com/AllenNeuralDynamics/aind-ecephys-nwb.git (commit: fe426c2b9876690ef38c3f52f6e1ac4576dd0fb9)...
+[nwb-ecephys] running capsule...
+
+
+NWB EXPORT ECEPHYS
+Running NWB conversion with the following parameters:
+Stub test: False
+Stub seconds: 10.0
+Write LFP: True
+Write RAW: False
+Temporal subsampling factor: 2
+Spatial subsampling factor: 4
+Highpass filter frequency: 0.1
+Surface channel indices for agar probes:
+NWB backend: zarr
+Found 4 JSON job files
+Session: ecephys_session
+Number of NWB files to write: 1
+Number of streams to write for each file: 1
+Failed to create base NWB file from metadata.
+Creating NWB file with info.
+Processing block0_imec0.ap_recording1
+        Loading block0_imec0.ap_recording1 from 4 JSON files
+                block0_imec0.ap_recording1_group0
+                block0_imec0.ap_recording1_group1
+                block0_imec0.ap_recording1_group2
+                block0_imec0.ap_recording1_group3
+                Aggregating channels from 4 groups
+        Added probe device: NP2013 from recording metadata
+        Adding LFP data for stream imec0.ap from wide-band signal - segment 0
+Could not find NP2013 in surface channel dictionary
+                Spatial subsampling factor: 4
+                Temporal subsampling factor: 2
+                Highpass filter frequency: 0.1
+        Saving preprocessed LFP to binary
+        Adding LFP recording BinaryFolderRecording: 96 channels - 1250.0Hz - 1 segments - 3,016,250 samples
+                       2,413.00s (40.22 minutes) - int16 dtype - 552.29 MiB
+Added 1 streams
+Configuring zarr backend
+Writing NWB file to ../results/ecephys_session_block0_recording1.nwb
+Writing time: 20.81s
+Done writing ../results/ecephys_session_block0_recording1.nwb
+NWB EXPORT ECEPHYS time: 623.78s
+[nwb-ecephys] completed!
+
+[preprocessing] allocated task time: 2h 40m
+[preprocessing] cloning git repo...
+cloning git repo: https://github.com/AllenNeuralDynamics/aind-ephys-preprocessing.git (commit: 9ef7b85c6d76ba84083f54e043ffe792ea16faa4)...
+[preprocessing] running capsule...
+Running preprocessing with the following parameters:
+        DENOISING_STRATEGY: cmr
+        FILTER TYPE: highpass
+        REMOVE_OUT_CHANNELS: True
+        REMOVE_BAD_CHANNELS: True
+        MAX BAD CHANNEL FRACTION: 0.5
+        COMPUTE_MOTION: True
+        APPLY_MOTION: False
+        MOTION PRESET: dredge_fast
+        MOTION TEMPORAL BIN S: 1
+        T_START: None
+        T_STOP: None
+        MIN_DURATION FOR PREPROCESSING: 120
+        N_JOBS: 16
+Found 1 configurations
+
+
+PREPROCESSING
+Preprocessing recording: ecephys_session - block0_imec0.ap_recording1_group1
+        Duration: 2413.87 s
+        Bad channel detection:
+                - dead channels - 3
+                - noise channels - 0
+                - out channels - 0
+        Removing 0 out channels
+        Removing 3 channels after cmr preprocessing
+write_binary_recording
+engine=process - n_jobs=16 - samples_per_chunk=30,000 - chunk_memory=5.32 MiB - total_memory=85.14 MiB - chunk_duration=1.00s
+        Computing motion correction with preset: dredge_fast
+                Using bin_s: 1
+                Using win_step_um: 142.5
+                Using win_scale_um: 142.5
+        Motion computed successfully!
+PREPROCESSING time: 637.6s
+[preprocessing] completed!
+
+[preprocessing] allocated task time: 2h 40m
+[preprocessing] cloning git repo...
+cloning git repo: https://github.com/AllenNeuralDynamics/aind-ephys-preprocessing.git (commit: 9ef7b85c6d76ba84083f54e043ffe792ea16faa4)...
+[preprocessing] running capsule...
+Running preprocessing with the following parameters:
+        DENOISING_STRATEGY: cmr
+        FILTER TYPE: highpass
+        REMOVE_OUT_CHANNELS: True
+        REMOVE_BAD_CHANNELS: True
+        MAX BAD CHANNEL FRACTION: 0.5
+        COMPUTE_MOTION: True
+        APPLY_MOTION: False
+        MOTION PRESET: dredge_fast
+        MOTION TEMPORAL BIN S: 1
+        T_START: None
+        T_STOP: None
+        MIN_DURATION FOR PREPROCESSING: 120
+        N_JOBS: 16
+Found 1 configurations
+
+
+PREPROCESSING
+Preprocessing recording: ecephys_session - block0_imec0.ap_recording1_group3
+        Duration: 2413.87 s
+        Bad channel detection:
+                - dead channels - 7
+                - noise channels - 0
+                - out channels - 0
+        Removing 0 out channels
+        Removing 7 channels after cmr preprocessing
+write_binary_recording
+engine=process - n_jobs=16 - samples_per_chunk=30,000 - chunk_memory=5.09 MiB - total_memory=81.48 MiB - chunk_duration=1.00s
+        Computing motion correction with preset: dredge_fast
+                Using bin_s: 1
+                Using win_step_um: 142.5
+                Using win_scale_um: 142.5
+        Motion computed successfully!
+PREPROCESSING time: 637.41s
+[preprocessing] completed!
+
+[preprocessing] allocated task time: 2h 40m
+[preprocessing] cloning git repo...
+cloning git repo: https://github.com/AllenNeuralDynamics/aind-ephys-preprocessing.git (commit: 9ef7b85c6d76ba84083f54e043ffe792ea16faa4)...
+[preprocessing] running capsule...
+Running preprocessing with the following parameters:
+        DENOISING_STRATEGY: cmr
+        FILTER TYPE: highpass
+        REMOVE_OUT_CHANNELS: True
+        REMOVE_BAD_CHANNELS: True
+        MAX BAD CHANNEL FRACTION: 0.5
+        COMPUTE_MOTION: True
+        APPLY_MOTION: False
+        MOTION PRESET: dredge_fast
+        MOTION TEMPORAL BIN S: 1
+        T_START: None
+        T_STOP: None
+        MIN_DURATION FOR PREPROCESSING: 120
+        N_JOBS: 16
+Found 1 configurations
+
+
+PREPROCESSING
+Preprocessing recording: ecephys_session - block0_imec0.ap_recording1_group2
+        Duration: 2413.87 s
+        Bad channel detection:
+                - dead channels - 1
+                - noise channels - 0
+                - out channels - 0
+        Removing 0 out channels
+        Removing 1 channels after cmr preprocessing
+write_binary_recording
+engine=process - n_jobs=16 - samples_per_chunk=30,000 - chunk_memory=5.44 MiB - total_memory=86.98 MiB - chunk_duration=1.00s
+        Computing motion correction with preset: dredge_fast
+                Using bin_s: 1
+                Using win_step_um: 142.5
+                Using win_scale_um: 142.5
+        Motion computed successfully!
+PREPROCESSING time: 639.26s
+[preprocessing] completed!
+
+[preprocessing] allocated task time: 2h 40m
+[preprocessing] cloning git repo...
+cloning git repo: https://github.com/AllenNeuralDynamics/aind-ephys-preprocessing.git (commit: 9ef7b85c6d76ba84083f54e043ffe792ea16faa4)...
+[preprocessing] running capsule...
+Running preprocessing with the following parameters:
+        DENOISING_STRATEGY: cmr
+        FILTER TYPE: highpass
+        REMOVE_OUT_CHANNELS: True
+        REMOVE_BAD_CHANNELS: True
+        MAX BAD CHANNEL FRACTION: 0.5
+        COMPUTE_MOTION: True
+        APPLY_MOTION: False
+        MOTION PRESET: dredge_fast
+        MOTION TEMPORAL BIN S: 1
+        T_START: None
+        T_STOP: None
+        MIN_DURATION FOR PREPROCESSING: 120
+        N_JOBS: 16
+Found 1 configurations
+
+
+PREPROCESSING
+Preprocessing recording: ecephys_session - block0_imec0.ap_recording1_group0
+        Duration: 2413.87 s
+        Bad channel detection:
+                - dead channels - 3
+                - noise channels - 0
+                - out channels - 0
+        Removing 0 out channels
+        Removing 3 channels after cmr preprocessing
+write_binary_recording
+engine=process - n_jobs=16 - samples_per_chunk=30,000 - chunk_memory=5.32 MiB - total_memory=85.14 MiB - chunk_duration=1.00s
+        Computing motion correction with preset: dredge_fast
+                Using bin_s: 1
+                Using win_step_um: 142.5
+                Using win_scale_um: 142.5
+        Motion computed successfully!
+PREPROCESSING time: 640.02s
+[preprocessing] completed!
+
+
+executor >  slurm (10)
+[6a/45e86f] job_dispatch (job-dispatch)    | 1 of 1 ✔
+[db/886979] preprocessing (preprocessing)  | 4 of 4 ✔
+[75/3a74b5] spi…ort4 (spikesort-kilosort4) | 0 of 4
+[-        ] postprocessing                 -
+[-        ] curation                       -
+[-        ] visualization                  -
+[-        ] results_collector              -
+[-        ] quality_control                -
+[-        ] quality_control_collector      -
+[eb/17c97d] nwb_ecephys (nwb-ecephys)      | 1 of 1 ✔
+[-        ] nwb_units                      -
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+executor >  slurm (10)
+[6a/45e86f] job_dispatch (job-dispatch)    | 1 of 1 ✔
+[db/886979] preprocessing (preprocessing)  | 4 of 4 ✔
+[53/77cf26] spi…ort4 (spikesort-kilosort4) | 1 of 4
+[-        ] postprocessing                 -
+[-        ] curation                       -
+[-        ] visualization                  -
+[-        ] results_collector              -
+[-        ] quality_control                -
+[-        ] quality_control_collector      -
+[eb/17c97d] nwb_ecephys (nwb-ecephys)      | 1 of 1 ✔
+[-        ] nwb_units                      -
+[spikesort-kilosort4] allocated task time: 2h 40m
+[spikesort-kilosort4] cloning git repo...
+cloning git repo: https://github.com/AllenNeuralDynamics/aind-ephys-spikesort-kilosort4.git (commit: f5893a8cf00a2a941b39a77e1ed72c7f0be59bf1)...
+[spikesort-kilosort4] running capsule...
+[spikesort-kilosort4] completed!
+
+
+
+executor >  slurm (10)
+[6a/45e86f] job_dispatch (job-dispatch)    | 1 of 1 ✔
+[db/886979] preprocessing (preprocessing)  | 4 of 4 ✔
+[53/77cf26] spi…ort4 (spikesort-kilosort4) | 1 of 4
+[-        ] postprocessing                 -
+[-        ] curation                       -
+[-        ] visualization                  -
+[-        ] results_collector              -
+[-        ] quality_control                -
+[-        ] quality_control_collector      -
+[eb/17c97d] nwb_ecephys (nwb-ecephys)      | 1 of 1 ✔
+[-        ] nwb_units                      -
+[spikesort-kilosort4] allocated task time: 2h 40m
+[spikesort-kilosort4] cloning git repo...
+cloning git repo: https://github.com/AllenNeuralDynamics/aind-ephys-spikesort-kilosort4.git (commit: f5893a8cf00a2a941b39a77e1ed72c7f0be59bf1)...
+[spikesort-kilosort4] running capsule...
+[spikesort-kilosort4] completed!
+
+
+executor >  slurm (10)
+[6a/45e86f] job_dispatch (job-dispatch)    | 1 of 1 ✔
+[db/886979] preprocessing (preprocessing)  | 4 of 4 ✔
+[d5/3b5da2] spi…ort4 (spikesort-kilosort4) | 2 of 4
+[-        ] postprocessing                 -
+[-        ] curation                       -
+[-        ] visualization                  -
+[-        ] results_collector              -
+[-        ] quality_control                -
+[-        ] quality_control_collector      -
+[eb/17c97d] nwb_ecephys (nwb-ecephys)      | 1 of 1 ✔
+[-        ] nwb_units                      -
+[spikesort-kilosort4] allocated task time: 2h 40m
+[spikesort-kilosort4] cloning git repo...
+cloning git repo: https://github.com/AllenNeuralDynamics/aind-ephys-spikesort-kilosort4.git (commit: f5893a8cf00a2a941b39a77e1ed72c7f0be59bf1)...
+[spikesort-kilosort4] running capsule...
+[spikesort-kilosort4] completed!
+
+
+
+
+
+
+
+
+executor >  slurm (10)
+[6a/45e86f] job_dispatch (job-dispatch)    | 1 of 1 ✔
+[db/886979] preprocessing (preprocessing)  | 4 of 4 ✔
+[a3/315ce5] spi…ort4 (spikesort-kilosort4) | 3 of 4
+[-        ] postprocessing                 -
+[-        ] curation                       -
+[-        ] visualization                  -
+[-        ] results_collector              -
+[-        ] quality_control                -
+[-        ] quality_control_collector      -
+[eb/17c97d] nwb_ecephys (nwb-ecephys)      | 1 of 1 ✔
+[-        ] nwb_units                      -
+[spikesort-kilosort4] allocated task time: 2h 40m
+[spikesort-kilosort4] cloning git repo...
+cloning git repo: https://github.com/AllenNeuralDynamics/aind-ephys-spikesort-kilosort4.git (commit: f5893a8cf00a2a941b39a77e1ed72c7f0be59bf1)...
+[spikesort-kilosort4] running capsule...
+[spikesort-kilosort4] completed!
+
+
+
+
+
+
+
+
+executor >  slurm (10)
+[6a/45e86f] job_dispatch (job-dispatch)    | 1 of 1 ✔
+[db/886979] preprocessing (preprocessing)  | 4 of 4 ✔
+[75/3a74b5] spi…ort4 (spikesort-kilosort4) | 4 of 4 ✔
+[-        ] postprocessing                 -
+[-        ] curation                       -
+[-        ] visualization                  -
+[-        ] results_collector              -
+[-        ] quality_control                -
+[-        ] quality_control_collector      -
+[eb/17c97d] nwb_ecephys (nwb-ecephys)      | 1 of 1 ✔
+[-        ] nwb_units                      -
+[spikesort-kilosort4] allocated task time: 2h 40m
+[spikesort-kilosort4] cloning git repo...
+cloning git repo: https://github.com/AllenNeuralDynamics/aind-ephys-spikesort-kilosort4.git (commit: f5893a8cf00a2a941b39a77e1ed72c7f0be59bf1)...
+[spikesort-kilosort4] running capsule...
+[spikesort-kilosort4] completed!
+
+
+
+
+
+
+
+
+executor >  slurm (14)
+[6a/45e86f] job_dispatch (job-dispatch)    | 1 of 1 ✔
+[db/886979] preprocessing (preprocessing)  | 4 of 4 ✔
+[75/3a74b5] spi…ort4 (spikesort-kilosort4) | 4 of 4 ✔
+[2b/398d31] pos…rocessing (postprocessing) | 0 of 4
+[-        ] curation                       -
+[-        ] visualization                  -
+[-        ] results_collector              -
+[-        ] quality_control                -
+[-        ] quality_control_collector      -
+[eb/17c97d] nwb_ecephys (nwb-ecephys)      | 1 of 1 ✔
+[-        ] nwb_units                      -
+[spikesort-kilosort4] allocated task time: 2h 40m
+[spikesort-kilosort4] cloning git repo...
+cloning git repo: https://github.com/AllenNeuralDynamics/aind-ephys-spikesort-kilosort4.git (commit: f5893a8cf00a2a941b39a77e1ed72c7f0be59bf1)...
+[spikesort-kilosort4] running capsule...
+[spikesort-kilosort4] completed!
+
+
+
+
+
+
+
+
+executor >  slurm (14)
+[6a/45e86f] job_dispatch (job-dispatch)    | 1 of 1 ✔
+[db/886979] preprocessing (preprocessing)  | 4 of 4 ✔
+[75/3a74b5] spi…ort4 (spikesort-kilosort4) | 4 of 4 ✔
+[2b/398d31] pos…rocessing (postprocessing) | 0 of 4
+[-        ] curation                       -
+[-        ] visualization                  -
+[-        ] results_collector              -
+[-        ] quality_control                -
+[-        ] quality_control_collector      -
+[eb/17c97d] nwb_ecephys (nwb-ecephys)      | 1 of 1 ✔
+[-        ] nwb_units                      -
+[spikesort-kilosort4] allocated task time: 2h 40m
+[spikesort-kilosort4] cloning git repo...
+cloning git repo: https://github.com/AllenNeuralDynamics/aind-ephys-spikesort-kilosort4.git (commit: f5893a8cf00a2a941b39a77e1ed72c7f0be59bf1)...
+[spikesort-kilosort4] running capsule...
+[spikesort-kilosort4] completed!
+
+
+executor >  slurm (14)
+[6a/45e86f] job_dispatch (job-dispatch)    | 1 of 1 ✔
+[db/886979] preprocessing (preprocessing)  | 4 of 4 ✔
+[75/3a74b5] spi…ort4 (spikesort-kilosort4) | 4 of 4 ✔
+[2b/398d31] pos…rocessing (postprocessing) | 0 of 4
+[-        ] curation                       -
+[-        ] visualization                  -
+[-        ] results_collector              -
+[-        ] quality_control                -
+[-        ] quality_control_collector      -
+[eb/17c97d] nwb_ecephys (nwb-ecephys)      | 1 of 1 ✔
+[-        ] nwb_units                      -
+
+
+
+
+
+
+
+executor >  slurm (14)
+[6a/45e86f] job_dispatch (job-dispatch)    | 1 of 1 ✔
+[db/886979] preprocessing (preprocessing)  | 4 of 4 ✔
+[75/3a74b5] spi…ort4 (spikesort-kilosort4) | 4 of 4 ✔
+[2b/398d31] pos…rocessing (postprocessing) | 0 of 4
+[-        ] curation                       -
+[-        ] visualization                  -
+[-        ] results_collector              -
+[-        ] quality_control                -
+[-        ] quality_control_collector      -
+[eb/17c97d] nwb_ecephys (nwb-ecephys)      | 1 of 1 ✔
+[-        ] nwb_units                      -
+
+
+
+
+
+
+[2026-03-09T16:58:43.019] error: *** JOB 18439979 ON nid001129 CANCELLED AT 2026-03-09T16:58:43 DUE TO TIME LIMIT ***
