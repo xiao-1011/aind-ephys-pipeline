@@ -8,12 +8,22 @@
 
 set -euo pipefail
 
-# Load nextflow from shared conda env
+echo "Starting job $SLURM_JOB_ID"
+date
+
+############################
+# Load conda environment
+############################
+
 source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate /cfs/klemming/projects/supr/dmclab/envs/aind-ephys
 
 export JAVA_HOME="$CONDA_PREFIX"
 export JAVA_CMD="$CONDA_PREFIX/bin/java"
+
+############################
+# Shared cache directories
+############################
 
 export NXF_APPTAINER_CACHEDIR="/cfs/klemming/projects/supr/dmclab/apptainer_cachedir"
 export NUMBA_CACHE_DIR="/cfs/klemming/projects/supr/dmclab/numba_cachedir"
@@ -21,16 +31,34 @@ export HF_HOME="/cfs/klemming/projects/supr/dmclab/hf_cachedir"
 export MPLCONFIGDIR="/cfs/klemming/projects/supr/dmclab/matplotlib_cachedir"
 export KACHERY_DIR="/cfs/klemming/projects/supr/dmclab/kachery_cachedir"
 
+############################
+# Pipeline paths
+############################
+
 PIPELINE_PATH="/cfs/klemming/projects/supr/dmclab/aind-ephys-pipeline"
+
 DATA_PATH="/cfs/klemming/projects/supr/dmclab/xiao/SGL_DATA/vr1320251126_g0"
+
 RESULTS_PATH="/cfs/klemming/projects/supr/dmclab/xiao/output/vr1320251126_g0"
-PARAMS_FILE="$PIPELINE_PATH/pipeline/active_params.json"
+
 WORKDIR="/cfs/klemming/projects/supr/dmclab/xiao/nextflow_work"
 
-mkdir -p "$RESULTS_PATH/nextflow"
-mkdir -p "$WORKDIR"
+PARAMS_FILE="$PIPELINE_PATH/pipeline/active_params.json"
 
-export DATA_PATH RESULTS_PATH PARAMS_FILE
+LOGDIR="/cfs/klemming/projects/supr/dmclab/nextflow_logs"
+
+############################
+# Create directories
+############################
+
+mkdir -p "$WORKDIR"
+mkdir -p "$RESULTS_PATH"
+mkdir -p "$RESULTS_PATH/nextflow"
+mkdir -p "$LOGDIR"
+
+############################
+# Select config
+############################
 
 if [ -f "$PIPELINE_PATH/pipeline/nextflow_slurm_custom.config" ]; then
     CONFIG_FILE="$PIPELINE_PATH/pipeline/nextflow_slurm_custom.config"
@@ -39,14 +67,24 @@ else
 fi
 
 echo "Using config file: $CONFIG_FILE"
-echo "Using pipeline path: $PIPELINE_PATH"
-echo "Using params file: $PARAMS_FILE"
+
+############################
+# Run Nextflow
+############################
 
 nextflow \
     -C "$CONFIG_FILE" \
-    -log "$RESULTS_PATH/nextflow/nextflow.log" \
+    -log "$LOGDIR/${SLURM_JOB_ID}.nextflow.log" \
     run "$PIPELINE_PATH/pipeline/main_multi_backend.nf" \
     -work-dir "$WORKDIR" \
     -resume \
-    --params_file "$PARAMS_FILE"
+    --params_file "$PARAMS_FILE" \
     --n_jobs 16
+    --data_path "$DATA_PATH" \
+    --results_path "$RESULTS_PATH" \
+    -with-report "$LOGDIR/${SLURM_JOB_ID}_report.html" \
+    -with-trace "$LOGDIR/${SLURM_JOB_ID}_trace.txt" \
+    -with-timeline "$LOGDIR/${SLURM_JOB_ID}_timeline.html"
+
+echo "Job finished"
+date
