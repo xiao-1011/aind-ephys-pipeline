@@ -34,17 +34,17 @@ export KACHERY_DIR="/cfs/klemming/projects/supr/dmclab/kachery_cachedir"
 # Pipeline paths
 ############################
 
-export DATA_PATH="/cfs/klemming/projects/supr/dmclab/xiao/SGL_DATA/vr1320251126_g0"
-
-export RESULTS_PATH="/cfs/klemming/projects/supr/dmclab/xiao/output/vr1320251126_g0"
-
-export PARAMS_FILE="$PIPELINE_PATH/pipeline/active_params.json"
-
 PIPELINE_PATH="/cfs/klemming/projects/supr/dmclab/aind-ephys-pipeline"
 
 WORKDIR="/cfs/klemming/projects/supr/dmclab/xiao/nextflow_work"
 
 LOGDIR="/cfs/klemming/projects/supr/dmclab/nextflow_logs"
+
+export DATA_PATH="/cfs/klemming/projects/supr/dmclab/xiao/SGL_DATA/vr1320251126_g0"
+
+export RESULTS_PATH="/cfs/klemming/projects/supr/dmclab/xiao/output/vr1320251126_g0"
+
+export PARAMS_FILE="$PIPELINE_PATH/pipeline/active_params.json"
 
 ############################
 # Create directories
