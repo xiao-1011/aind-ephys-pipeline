@@ -29,6 +29,7 @@ export NUMBA_CACHE_DIR="/cfs/klemming/projects/supr/dmclab/numba_cachedir"
 export HF_HOME="/cfs/klemming/projects/supr/dmclab/hf_cachedir"
 export MPLCONFIGDIR="/cfs/klemming/projects/supr/dmclab/matplotlib_cachedir"
 export KACHERY_DIR="/cfs/klemming/projects/supr/dmclab/kachery_cachedir"
+export NXF_HOME="/cfs/klemming/projects/supr/dmclab/.nextflow-xiao"
 
 ############################
 # Pipeline paths
