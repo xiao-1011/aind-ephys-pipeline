@@ -15,10 +15,13 @@ date
 # Load conda environment
 ############################
 
+CLEAN_PATH="$PATH"
 source activate /cfs/klemming/projects/supr/dmclab/envs/aind-ephys
-
+NF_BIN="$(which nextflow)"
 export JAVA_HOME="$CONDA_PREFIX"
 export JAVA_CMD="$CONDA_PREFIX/bin/java"
+source deactivate
+export PATH="$CLEAN_PATH"
 
 ############################
 # Shared cache directories
@@ -71,7 +74,7 @@ echo "Using config file: $CONFIG_FILE"
 # Run Nextflow
 ############################
 
-nextflow \
+$NF_BIN \
     -C "$CONFIG_FILE" \
     -log "$LOGDIR/${SLURM_JOB_ID}.nextflow.log" \
     run "$PIPELINE_PATH/pipeline/main_multi_backend.nf" \
