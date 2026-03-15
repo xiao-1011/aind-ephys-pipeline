@@ -81,7 +81,7 @@ $NF_BIN \
     -work-dir "$WORKDIR" \
     -resume \
     --params_file "$PARAMS_FILE" \
-    --n_jobs 16
+    --n_jobs 16 \
     --data_path "$DATA_PATH" \
     --results_path "$RESULTS_PATH" \
     -with-report "$LOGDIR/${SLURM_JOB_ID}_report.html" \
