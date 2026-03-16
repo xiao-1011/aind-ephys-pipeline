@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH -A naiss2026-3-127
-#SBATCH -t 12:00:00
+#SBATCH -t 24:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH -J spikesortingnf_dmc
