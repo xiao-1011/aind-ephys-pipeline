@@ -43,9 +43,9 @@ WORKDIR="/cfs/klemming/projects/supr/dmclab/nextflow_work"
 
 LOGDIR="/cfs/klemming/projects/supr/dmclab/nextflow_logs"
 
-export DATA_PATH="/cfs/klemming/projects/supr/dmclab/xiao/SGL_DATA/vr1320251126_g0"
+export DATA_PATH="/cfs/klemming/projects/supr/dmclab/xiao/SGL_DATA/vr1220251126_g1"
 
-export RESULTS_PATH="/cfs/klemming/projects/supr/dmclab/nextflow_results/vr1320251126_g0"
+export RESULTS_PATH="/cfs/klemming/projects/supr/dmclab/nextflow_results/vr1220251126_g1"
 
 export PARAMS_FILE="$PIPELINE_PATH/pipeline/active_params.json"
 
