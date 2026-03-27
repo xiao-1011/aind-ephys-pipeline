@@ -26,7 +26,7 @@ date
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Parent directory of your session folder(s).
-export DATA_PATH="/cfs/klemming/projects/supr/dmclab/EDIT_ME/SGL_DATA"
+export DATA_PATH="/cfs/klemming/projects/supr/dmclab/Joana/Raw_data/999770/999770_day1_g0"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Shared infrastructure — rarely needs editing
