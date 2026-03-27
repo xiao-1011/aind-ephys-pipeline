@@ -56,8 +56,12 @@ export GPU_SIF="${NXF_APPTAINER_CACHEDIR}/kilosort4-arm.sif"
 export APPTAINER_BIN_DIR="${PIPELINE_PATH}/pipeline/bin_gh200"
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Environment setup — load nextflow from the shared conda env
+# Environment setup — load modules, then load nextflow from the shared conda env
 # ─────────────────────────────────────────────────────────────────────────────
+
+ml PDC/24.11
+ml miniconda3/25.3.1-1-cpeGNU-24.11
+ml apptainer/1.4.0-cpeGNU-24.11
 
 CLEAN_PATH="$PATH"
 source activate /cfs/klemming/projects/supr/dmclab/envs/aind-ephys
