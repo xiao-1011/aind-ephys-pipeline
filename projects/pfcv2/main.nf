@@ -91,6 +91,7 @@ process SORT_SC2 {
 
 process SORT_IRONCLUST {
     tag "${session}/${probe}"
+    errorStrategy 'ignore'
 
     publishDir "${params.results_path}/${session}/${probe}",
                mode: params.publish_mode, overwrite: true
@@ -111,6 +112,7 @@ process SORT_IRONCLUST {
 
 process SORT_YASS {
     tag "${session}/${probe}"
+    errorStrategy 'ignore'
 
     publishDir "${params.results_path}/${session}/${probe}",
                mode: params.publish_mode, overwrite: true
@@ -136,9 +138,7 @@ process COMPARE {
                mode: params.publish_mode, overwrite: true
 
     input:
-    tuple val(session), val(probe),
-          path('sorter_kilosort4'), path('sorter_spykingcircus2'),
-          path('sorter_ironclust'), path('sorter_yass')
+    tuple val(session), val(probe), path(sorter_dirs)
 
     output:
     tuple val(session), val(probe), path('consensus_labels.json'), emit: consensus
@@ -159,15 +159,10 @@ process ANALYZE {
                mode: params.publish_mode, overwrite: true
 
     input:
-    tuple val(session), val(probe),
-          path('preprocessed'),
-          path('sorter_kilosort4'), path('sorter_spykingcircus2'),
-          path('sorter_ironclust'), path('sorter_yass')
+    tuple val(session), val(probe), path('preprocessed'), path(sorter_dirs)
 
     output:
-    tuple val(session), val(probe),
-          path('analyzer_kilosort4'), path('analyzer_spykingcircus2'),
-          path('analyzer_ironclust'), path('analyzer_yass'), emit: analyzers
+    tuple val(session), val(probe), path('analyzer_*'), emit: analyzers
 
     script:
     """
@@ -182,15 +177,10 @@ process CURATE {
                mode: params.publish_mode, overwrite: true
 
     input:
-    tuple val(session), val(probe),
-          path('analyzer_kilosort4'), path('analyzer_spykingcircus2'),
-          path('analyzer_ironclust'), path('analyzer_yass'),
-          path('consensus_labels.json')
+    tuple val(session), val(probe), path(analyzer_dirs), path('consensus_labels.json')
 
     output:
-    tuple val(session), val(probe),
-          path('curation_kilosort4.json'), path('curation_spykingcircus2.json'),
-          path('curation_ironclust.json'), path('curation_yass.json'), emit: curation
+    tuple val(session), val(probe), path('curation_*.json'), emit: curation
 
     script:
     """
@@ -210,11 +200,7 @@ process NWB_EXPORT {
 
     input:
     tuple val(session), val(probe),
-          path('preprocessed'),
-          path('sorter_kilosort4'), path('sorter_spykingcircus2'),
-          path('sorter_ironclust'), path('sorter_yass'),
-          path('curation_kilosort4.json'), path('curation_spykingcircus2.json'),
-          path('curation_ironclust.json'), path('curation_yass.json')
+          path('preprocessed'), path(sorter_dirs), path(curation_files)
 
     output:
     tuple val(session), val(probe), path('*.nwb'), emit: nwb
@@ -234,11 +220,15 @@ process NWB_EXPORT {
 // DAG (per probe, all parallel across probes):
 //
 //   PREPROCESS
-//     ├─→ SORT_KS4       (GPU) ─→ ┐
-//     ├─→ SORT_SC2       (CPU) ─→ ┤─→ COMPARE ─→ ┐
-//     ├─→ SORT_IRONCLUST (CPU) ─→ ┤               │
-//     └─→ SORT_YASS      (CPU) ─→ ┘               │
-//                                  └─→ ANALYZE ─→ CURATE ─→ NWB_EXPORT
+//     ├─→ SORT_KS4       (GPU, required) ─→ ┐
+//     ├─→ SORT_SC2       (CPU, required) ─→ ┤─→ COMPARE ─→ ┐
+//     ├─→ SORT_IRONCLUST (CPU, optional) ─→ ┤               │
+//     └─→ SORT_YASS      (CPU, optional) ─→ ┘               │
+//                                            └─→ ANALYZE ─→ CURATE ─→ NWB_EXPORT
+//
+// IronClust and YASS use errorStrategy 'ignore' — if they fail, the pipeline
+// continues with whichever sorters succeeded. The downstream scripts auto-
+// discover all sorter_* folders present.
 // ─────────────────────────────────────────────────────────────────────────────
 
 workflow {
@@ -254,32 +244,30 @@ workflow {
     sort_ironclust_out = SORT_IRONCLUST(preprocess_out.preprocessed)
     sort_yass_out      = SORT_YASS(preprocess_out.preprocessed)
 
-    // COMPARE: waits for all four sorters
-    compare_in = sort_ks4_out.sorter
-        .join(sort_sc2_out.sorter,       by: [0, 1])
-        .join(sort_ironclust_out.sorter, by: [0, 1])
-        .join(sort_yass_out.sorter,      by: [0, 1])
-    compare_out = COMPARE(compare_in)
+    // Collect all successful sorter outputs per probe.
+    // Failed sorters (errorStrategy 'ignore') simply don't emit — the group
+    // contains only the sorters that succeeded.
+    all_sorters = sort_ks4_out.sorter
+        .mix(sort_sc2_out.sorter, sort_ironclust_out.sorter, sort_yass_out.sorter)
+        .groupTuple(by: [0, 1])
+    // Emits: (session, probe, [sorter_dir1, sorter_dir2, ...])
 
-    // ANALYZE: preprocessed + all four sorters
+    // COMPARE: 06-compare.py discovers all sorter_* dirs automatically
+    compare_out = COMPARE(all_sorters)
+
+    // ANALYZE: 03-analyze.py discovers all sorter_* dirs automatically
     analyze_in = preprocess_out.preprocessed
-        .join(sort_ks4_out.sorter,       by: [0, 1])
-        .join(sort_sc2_out.sorter,       by: [0, 1])
-        .join(sort_ironclust_out.sorter, by: [0, 1])
-        .join(sort_yass_out.sorter,      by: [0, 1])
+        .join(all_sorters, by: [0, 1])
     analyze_out = ANALYZE(analyze_in)
 
-    // CURATE: analyzers + consensus labels
+    // CURATE: 04-curate.py discovers all analyzer_* dirs automatically
     curate_in = analyze_out.analyzers
         .join(compare_out.consensus, by: [0, 1])
     curate_out = CURATE(curate_in)
 
-    // NWB_EXPORT: preprocessed + all four sorters + all four curation files
+    // NWB_EXPORT: 05-export-nwb.py discovers all curation_*.json files automatically
     nwb_in = preprocess_out.preprocessed
-        .join(sort_ks4_out.sorter,       by: [0, 1])
-        .join(sort_sc2_out.sorter,       by: [0, 1])
-        .join(sort_ironclust_out.sorter, by: [0, 1])
-        .join(sort_yass_out.sorter,      by: [0, 1])
-        .join(curate_out.curation,       by: [0, 1])
+        .join(all_sorters, by: [0, 1])
+        .join(curate_out.curation, by: [0, 1])
     NWB_EXPORT(nwb_in)
 }
