@@ -20,22 +20,23 @@ From: nvcr.io/nvidia/pytorch:26.02-py3
 %post
     export DEBIAN_FRONTEND=noninteractive
 
-    # Pin scipy to the NGC pre-installed version. The NGC PyTorch ARM64
-    # image ships scipy linked against NVPL BLAS (optimized for Grace).
-    # If pip upgrades scipy, the PyPI wheel bundles its own OpenBLAS with a
-    # buggy NEOVERSEN2 kernel that segfaults on GH200 (288 hw threads >
-    # compiled MAX_THREADS=128).
-    NGC_SCIPY=$(python -c "import scipy; print(scipy.__version__)")
+    # The PyPI scipy ARM64 wheel bundles OpenBLAS with a buggy NEOVERSEN2
+    # kernel that crashes on GH200 Grace (288 hw threads > MAX_THREADS=128).
+    # Fix: recompile scipy from source so it links against system BLAS
+    # instead of bundling the broken one. The NGC PyTorch image already has
+    # gfortran and NVPL/OpenBLAS dev libraries pre-installed.
+    pip install --no-cache-dir --no-binary scipy scipy
 
+    # Install the rest (scipy already satisfied from source build above)
     pip install --no-cache-dir \
         kilosort==4.0.38 \
         spikeinterface[full]==0.103.0 \
         "aind-data-schema<2.0" \
-        aind-log-utils==0.2.3 \
-        "scipy==${NGC_SCIPY}"
+        aind-log-utils==0.2.3
 
 %environment
     export DEBIAN_FRONTEND=noninteractive
+    export OPENBLAS_NUM_THREADS=64
 
 %runscript
     exec python "$@"
