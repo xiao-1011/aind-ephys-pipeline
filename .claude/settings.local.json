@@ -4,7 +4,14 @@
       "WebFetch(domain:raw.githubusercontent.com)",
       "WebFetch(domain:github.com)",
       "WebFetch(domain:support.pdc.kth.se)",
-      "WebFetch(domain:blogs.oracle.com)"
+      "WebFetch(domain:blogs.oracle.com)",
+      "Bash(grep -E \"\\\\.py$|\\\\.md$\")",
+      "Bash(cp /home/anil/git/aind-ephys-pipeline/projects/pfc/scripts/01-preprocess.py /home/anil/git/aind-ephys-pipeline/projects/pfcv2/scripts/01-preprocess.py)",
+      "Bash(cp /home/anil/git/aind-ephys-pipeline/projects/pfc/scripts/03-analyze.py /home/anil/git/aind-ephys-pipeline/projects/pfcv2/scripts/03-analyze.py)",
+      "Bash(cp /home/anil/git/aind-ephys-pipeline/projects/pfc/scripts/04-curate.py /home/anil/git/aind-ephys-pipeline/projects/pfcv2/scripts/04-curate.py)",
+      "Bash(find /mnt/dardel/ -maxdepth 4 -name *kilosort* -type f)",
+      "Bash(cat /mnt/dardel/ephys-pipeline-output/pfcv2/work/82/bdf4c5*/.command.out)",
+      "Bash(cat /mnt/dardel/ephys-pipeline-output/pfcv2/work/82/bdf4c5*/.command.err)"
     ]
   }
 }

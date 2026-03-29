@@ -20,14 +20,19 @@ From: nvcr.io/nvidia/pytorch:26.02-py3
 %post
     export DEBIAN_FRONTEND=noninteractive
 
-    # Core spike-sorting stack
-    # Note: apt-get is not available without fakeroot on Dardel (nosuid apptainer).
-    # libfftw3-dev is already present in the NGC PyTorch base image.
+    # Pin scipy to the NGC pre-installed version. The NGC PyTorch ARM64
+    # image ships scipy linked against NVPL BLAS (optimized for Grace).
+    # If pip upgrades scipy, the PyPI wheel bundles its own OpenBLAS with a
+    # buggy NEOVERSEN2 kernel that segfaults on GH200 (288 hw threads >
+    # compiled MAX_THREADS=128).
+    NGC_SCIPY=$(python -c "import scipy; print(scipy.__version__)")
+
     pip install --no-cache-dir \
         kilosort==4.0.38 \
         spikeinterface[full]==0.103.0 \
         "aind-data-schema<2.0" \
-        aind-log-utils==0.2.3
+        aind-log-utils==0.2.3 \
+        "scipy==${NGC_SCIPY}"
 
 %environment
     export DEBIAN_FRONTEND=noninteractive
