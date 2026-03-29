@@ -1,7 +1,7 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────────────────────
 # PFC v2 — SLURM submission script for NAISS Dardel
-# Runs KS4 + SpykingCircus2 + IronClust + YASS in parallel.
+# Runs KS4 + SpykingCircus2 + MountainSort5 + Tridesclous2 in parallel.
 #
 # Usage:
 #   sbatch slurm_submit.sh

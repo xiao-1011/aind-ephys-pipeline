@@ -89,7 +89,7 @@ process SORT_SC2 {
     """
 }
 
-process SORT_IRONCLUST {
+process SORT_MS5 {
     tag "${session}/${probe}"
     errorStrategy 'ignore'
 
@@ -100,17 +100,17 @@ process SORT_IRONCLUST {
     tuple val(session), val(probe), path('preprocessed')
 
     output:
-    tuple val(session), val(probe), path('sorter_ironclust'), emit: sorter
+    tuple val(session), val(probe), path('sorter_mountainsort5'), emit: sorter
 
     script:
     """
     python ${projectDir}/scripts/02-sort.py \\
         . \\
-        --sorters ironclust
+        --sorters mountainsort5
     """
 }
 
-process SORT_YASS {
+process SORT_TDC2 {
     tag "${session}/${probe}"
     errorStrategy 'ignore'
 
@@ -121,13 +121,13 @@ process SORT_YASS {
     tuple val(session), val(probe), path('preprocessed')
 
     output:
-    tuple val(session), val(probe), path('sorter_yass'), emit: sorter
+    tuple val(session), val(probe), path('sorter_tridesclous2'), emit: sorter
 
     script:
     """
     python ${projectDir}/scripts/02-sort.py \\
         . \\
-        --sorters yass
+        --sorters tridesclous2
     """
 }
 
@@ -220,15 +220,14 @@ process NWB_EXPORT {
 // DAG (per probe, all parallel across probes):
 //
 //   PREPROCESS
-//     ├─→ SORT_KS4       (GPU, required) ─→ ┐
-//     ├─→ SORT_SC2       (CPU, required) ─→ ┤─→ COMPARE ─→ ┐
-//     ├─→ SORT_IRONCLUST (CPU, optional) ─→ ┤               │
-//     └─→ SORT_YASS      (CPU, optional) ─→ ┘               │
-//                                            └─→ ANALYZE ─→ CURATE ─→ NWB_EXPORT
+//     ├─→ SORT_KS4  (GPU, required) ─→ ┐
+//     ├─→ SORT_SC2  (CPU, required) ─→ ┤─→ COMPARE ─→ ┐
+//     ├─→ SORT_MS5  (CPU, optional) ─→ ┤               │
+//     └─→ SORT_TDC2 (CPU, optional) ─→ ┘               │
+//                                       └─→ ANALYZE ─→ CURATE ─→ NWB_EXPORT
 //
-// IronClust and YASS use errorStrategy 'ignore' — if they fail, the pipeline
-// continues with whichever sorters succeeded. The downstream scripts auto-
-// discover all sorter_* folders present.
+// MountainSort5 and Tridesclous2 use errorStrategy 'ignore' — if they fail,
+// the pipeline continues with whichever sorters succeeded.
 // ─────────────────────────────────────────────────────────────────────────────
 
 workflow {
@@ -239,16 +238,16 @@ workflow {
     preprocess_out = PREPROCESS(probes_ch)
 
     // All four sorters run in parallel on the same preprocessed recording
-    sort_ks4_out       = SORT_KS4(preprocess_out.preprocessed)
-    sort_sc2_out       = SORT_SC2(preprocess_out.preprocessed)
-    sort_ironclust_out = SORT_IRONCLUST(preprocess_out.preprocessed)
-    sort_yass_out      = SORT_YASS(preprocess_out.preprocessed)
+    sort_ks4_out  = SORT_KS4(preprocess_out.preprocessed)
+    sort_sc2_out  = SORT_SC2(preprocess_out.preprocessed)
+    sort_ms5_out  = SORT_MS5(preprocess_out.preprocessed)
+    sort_tdc2_out = SORT_TDC2(preprocess_out.preprocessed)
 
     // Collect all successful sorter outputs per probe.
     // Failed sorters (errorStrategy 'ignore') simply don't emit — the group
     // contains only the sorters that succeeded.
     all_sorters = sort_ks4_out.sorter
-        .mix(sort_sc2_out.sorter, sort_ironclust_out.sorter, sort_yass_out.sorter)
+        .mix(sort_sc2_out.sorter, sort_ms5_out.sorter, sort_tdc2_out.sorter)
         .groupTuple(by: [0, 1])
     // Emits: (session, probe, [sorter_dir1, sorter_dir2, ...])
 
