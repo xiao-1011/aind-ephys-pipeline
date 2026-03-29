@@ -50,8 +50,7 @@ export KACHERY_DIR="${CACHE_BASE}/kachery"
 
 # Container SIF paths
 export CPU_SIF="${NXF_APPTAINER_CACHEDIR}/aind-ephys-pipeline-base.sif"
-# x86 SIF from shared cache — ARM-native SIF has buggy OpenBLAS NEOVERSEN2 kernel
-export GPU_SIF="/cfs/klemming/projects/supr/dmclab/apptainer_cachedir/ghcr.io-allenneuraldynamics-aind-ephys-spikesort-kilosort4-si-0.103.0.img"
+export GPU_SIF="${NXF_APPTAINER_CACHEDIR}/kilosort4-arm.sif"
 
 # Custom apptainer binary for GH200 (ARM) sorting nodes
 export APPTAINER_BIN_DIR="${PIPELINE_PATH}/pipeline/bin_gh200"
