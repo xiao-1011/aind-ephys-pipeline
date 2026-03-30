@@ -5,8 +5,8 @@
 #     /cfs/klemming/projects/supr/dmclab/apptainer_cachedir/kilosort4-arm.sif \
 #     kilosort4-arm.def
 #
-# NOTE: --squashfs-opts "-comp lz4" is required — GH200 compute nodes only support lz4,
-# not the default zlib compression.
+# NOTE: --mksquashfs-args "-comp lz4" is required — GH200 compute nodes only
+# support lz4, not the default zlib compression.
 
 Bootstrap: docker
 From: nvcr.io/nvidia/pytorch:26.02-py3
@@ -20,39 +20,119 @@ From: nvcr.io/nvidia/pytorch:26.02-py3
 %post
     export DEBIAN_FRONTEND=noninteractive
 
-    # scipy-openblas32 provides OpenBLAS 0.3.31 (MAX_THREADS=64) which
-    # does not crash on GH200 Grace (288 hw threads).
     pip install --no-cache-dir scipy-openblas32
 
-    # Install everything normally — no source build needed.
     pip install --no-cache-dir \
         kilosort==4.0.38 \
         spikeinterface[full]==0.103.0 \
         "aind-data-schema<2.0" \
         aind-log-utils==0.2.3
 
-    # The scipy binary wheel bundles a broken OpenBLAS whose NEOVERSEN2
-    # kernel segfaults on GH200 (sgemm_incopy_NEOVERSEN2 crash).
-    # Replace it with the working library from scipy-openblas32.
+    # ── Fix ALL OpenBLAS instances for GH200 (288 hardware threads) ──────
+    #
+    # The container has MULTIPLE OpenBLAS shared libraries:
+    #   1. scipy.libs/libscipy_openblas*.so  (scipy_ symbol prefix)
+    #   2. System/numpy libopenblas.so        (standard symbol prefix)
+    #
+    # Old OpenBLAS (< 0.3.28) fatally aborts when detected CPU count exceeds
+    # the compile-time MAX_THREADS.  On GH200 nodes with 288 CPU threads, a
+    # library built with MAX_THREADS=128 only has 256 buffer slots → crash.
+    #
+    # OpenBLAS 0.3.31 fixes this (auxiliary-array fallback) AND fixes the
+    # NEOVERSEN2 sgemm_incopy segfault.
+    #
+    # Strategy:
+    #   A) Replace scipy-prefixed .so with scipy-openblas32's 0.3.31 copy
+    #   B) Build OpenBLAS 0.3.31 from source (NUM_THREADS=512) to replace
+    #      ALL standard-symbol libopenblas (system + packages)
+    #   C) LD_PRELOAD as safety net (in %environment)
+
+    # ── Diagnose: show BEFORE state ──
+    echo "=== OpenBLAS libraries BEFORE fix ==="
+    find / \( -name 'libopenblas*' -o -name 'libscipy_openblas*' \) \
+        -not -path '*/proc/*' 2>/dev/null | sort || true
+    python -c "import numpy; print('numpy linked BLAS:', numpy.show_config())" 2>&1 | head -30 || true
+    echo "======================================"
+
+    # ── A: Replace all scipy-prefixed OpenBLAS in site-packages ──
     python -c "
-import glob, os, shutil, scipy, scipy_openblas32
+import glob, os, shutil, site, scipy_openblas32
 
-scipy_libs = os.path.join(os.path.dirname(scipy.__file__), '..', 'scipy.libs')
-broken = glob.glob(os.path.join(scipy_libs, 'libscipy_openblas*.so'))
 good = os.path.join(os.path.dirname(scipy_openblas32.__file__), 'lib', 'libscipy_openblas.so')
+print(f'Good (scipy-prefix): {good} ({os.path.getsize(good)} bytes)')
 
-if not broken:
-    raise FileNotFoundError('No libscipy_openblas*.so in ' + scipy_libs)
-
-for lib in broken:
-    print(f'Replacing {lib} ({os.path.getsize(lib)} bytes)')
-    print(f'     with {good} ({os.path.getsize(good)} bytes)')
-    shutil.copy2(good, lib)
+for sp in site.getsitepackages():
+    for lib in glob.glob(os.path.join(sp, '**', 'libscipy_openblas*.so'), recursive=True):
+        if 'scipy_openblas32' in lib:
+            continue
+        print(f'  Replacing: {lib} ({os.path.getsize(lib)} bytes)')
+        shutil.copy2(good, lib)
 "
+
+    # ── B: Build OpenBLAS 0.3.31 from source (standard prefix) ──
+    echo "=== Checking build tools ==="
+    echo "gcc: $(command -v gcc 2>/dev/null || echo MISSING)"
+    echo "make: $(command -v make 2>/dev/null || echo MISSING)"
+    echo "gfortran: $(command -v gfortran 2>/dev/null || echo MISSING)"
+
+    if ! command -v gcc &>/dev/null || ! command -v make &>/dev/null; then
+        echo "ERROR: gcc or make not found — cannot build OpenBLAS from source"
+        echo "Attempting apt-get install as fallback..."
+        apt-get update -qq && apt-get install -y -qq build-essential gfortran || true
+    fi
+
+    echo "=== Building OpenBLAS 0.3.31 from source (NUM_THREADS=512) ==="
+    cd /tmp
+    # Try curl first, fall back to wget, then Python
+    curl -sL -o OpenBLAS-0.3.31.tar.gz \
+        https://github.com/OpenMathLib/OpenBLAS/releases/download/v0.3.31/OpenBLAS-0.3.31.tar.gz 2>/dev/null \
+    || wget -q -O OpenBLAS-0.3.31.tar.gz \
+        https://github.com/OpenMathLib/OpenBLAS/releases/download/v0.3.31/OpenBLAS-0.3.31.tar.gz 2>/dev/null \
+    || python -c "import urllib.request; urllib.request.urlretrieve('https://github.com/OpenMathLib/OpenBLAS/releases/download/v0.3.31/OpenBLAS-0.3.31.tar.gz', 'OpenBLAS-0.3.31.tar.gz')"
+
+    tar xf OpenBLAS-0.3.31.tar.gz
+    cd OpenBLAS-0.3.31
+
+    if command -v gfortran &>/dev/null; then
+        make -j$(nproc) NUM_THREADS=512 USE_OPENMP=0 2>&1 | tail -10
+    else
+        echo "No gfortran — building without LAPACK"
+        make -j$(nproc) NUM_THREADS=512 USE_OPENMP=0 NO_LAPACK=1 NO_LAPACKE=1 2>&1 | tail -10
+    fi
+    make PREFIX=/usr/local install 2>&1 | tail -5
+
+    # Verify the build produced a library
+    ls -la /usr/local/lib/libopenblas* || echo "WARNING: source build may have failed"
+
+    # Replace ALL standard-symbol libopenblas everywhere (not just /usr/lib)
+    echo "=== Replacing all standard-symbol OpenBLAS ==="
+    find / \( -name 'libopenblas*.so' -o -name 'libopenblas*.so.*' \) \
+        -not -type l -not -path '*/proc/*' -not -path '/usr/local/lib/*' \
+        -not -path '*/scipy_openblas32/*' 2>/dev/null | while read lib; do
+        echo "  Replacing: $lib ($(stat -c%s "$lib") bytes)"
+        cp /usr/local/lib/libopenblas.so "$lib"
+    done
+
+    ldconfig
+    cd /
+    rm -rf /tmp/OpenBLAS-0.3.31 /tmp/OpenBLAS-0.3.31.tar.gz
+
+    # ── Verify ──
+    echo "=== OpenBLAS libraries AFTER fix ==="
+    find / \( -name 'libopenblas*' -o -name 'libscipy_openblas*' \) \
+        -not -path '*/proc/*' 2>/dev/null | while read f; do
+        size=$(stat -c%s "$f" 2>/dev/null || echo "?")
+        link=$(readlink "$f" 2>/dev/null || echo "")
+        echo "  $f  ($size bytes) ${link:+-> $link}"
+    done
+    echo "================================"
 
 %environment
     export DEBIAN_FRONTEND=noninteractive
     export OPENBLAS_NUM_THREADS=64
+    # Safety net: ensure the source-built OpenBLAS takes precedence for any
+    # standard-symbol BLAS calls that might still resolve to the old library.
+    export LD_PRELOAD=/usr/local/lib/libopenblas.so
 
 %runscript
     exec python "$@"
