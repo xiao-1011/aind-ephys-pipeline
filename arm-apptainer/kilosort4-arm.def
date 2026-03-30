@@ -20,15 +20,19 @@ From: nvcr.io/nvidia/pytorch:26.02-py3
 %post
     export DEBIAN_FRONTEND=noninteractive
 
-    # The PyPI scipy ARM64 wheel bundles OpenBLAS with a buggy NEOVERSEN2
-    # kernel that crashes on GH200 Grace (288 hw threads > MAX_THREADS=128).
-    # Fix: recompile scipy from source so it links against system BLAS
-    # instead of bundling the broken one. The NGC PyTorch image already has
-    # gfortran and NVPL/OpenBLAS dev libraries pre-installed.
-    pip install --no-cache-dir --no-binary scipy scipy
+    # The NGC base image ships scipy 1.17.0 which bundles OpenBLAS with a
+    # buggy NEOVERSEN2 kernel (288 hw threads > MAX_THREADS=128 → segfault).
+    # We must remove it first — otherwise pip sees "Requirement already
+    # satisfied" and --no-binary has no effect.
+    pip uninstall -y scipy
 
-    # Install the rest (scipy already satisfied from source build above)
-    pip install --no-cache-dir \
+    # Reinstall scipy from source so it links against system BLAS (NVPL /
+    # OpenBLAS dev libs are pre-installed in the NGC image) instead of
+    # bundling the broken PyPI binary wheel.
+    # KiloSort pins numpy<2, so installing everything together lets the
+    # resolver pick a compatible scipy + numpy pair in one pass.
+    pip install --no-cache-dir --no-binary scipy \
+        scipy \
         kilosort==4.0.38 \
         spikeinterface[full]==0.103.0 \
         "aind-data-schema<2.0" \
