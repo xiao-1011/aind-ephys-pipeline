@@ -50,6 +50,7 @@ export KACHERY_DIR="${CACHE_BASE}/kachery"
 
 # Container SIF paths
 export CPU_SIF="${NXF_APPTAINER_CACHEDIR}/aind-ephys-pipeline-base.sif"
+export MS5_SIF="${NXF_APPTAINER_CACHEDIR}/mountainsort5-cpu.sif"
 # TEST: use colleague's SIF to check if OPENBLAS_NUM_THREADS=1 alone fixes KS4
 # Revert to: export GPU_SIF="${NXF_APPTAINER_CACHEDIR}/kilosort4-arm.sif"
 export GPU_SIF="/cfs/klemming/projects/supr/dmclab/apptainer_cachedir/ghcr.io-allenneuraldynamics-aind-ephys-spikesort-kilosort4-si-0.103.0.img"

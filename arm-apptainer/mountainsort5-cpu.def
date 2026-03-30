@@ -1,0 +1,22 @@
+# MountainSort5 CPU container (x86_64)
+#
+# Build on Dardel login node (NOT GH200 — this is x86):
+#   ml PDC/24.11
+#   ml apptainer/1.4.0-cpeGNU-24.11
+#   apptainer build \
+#     /cfs/klemming/projects/supr/dmclab/ephys-pipeline-cache/apptainer/mountainsort5-cpu.sif \
+#     mountainsort5-cpu.def
+
+Bootstrap: docker
+From: ghcr.io/allenneuraldynamics/aind-ephys-pipeline-base:si-0.103.0
+
+%labels
+    Author aind-ephys-pipeline
+    MountainSort5 true
+    SpikeInterfaceVersion 0.103.0
+
+%post
+    pip install --no-cache-dir mountainsort5
+
+%runscript
+    exec /bin/bash "$@"

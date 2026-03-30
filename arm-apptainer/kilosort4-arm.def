@@ -33,8 +33,12 @@ From: nvcr.io/nvidia/pytorch:26.02-py3
     # Provide BLAS for scipy's meson build system
     pip install --no-cache-dir scipy-openblas32
 
-    # Export pkg-config path so meson finds scipy-openblas32
-    export PKG_CONFIG_PATH=$(python -c "import scipy_openblas32; print(scipy_openblas32.get_pkg_config())")
+    # get_pkg_config() returns the .pc file CONTENT, not a path.
+    # Write it to a file so meson can find it via pkg-config.
+    mkdir -p /usr/local/lib/pkgconfig
+    python -c "import scipy_openblas32; print(scipy_openblas32.get_pkg_config())" \
+        > /usr/local/lib/pkgconfig/scipy-openblas.pc
+    export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig
 
     # Build scipy from source + install the rest of the stack
     pip install --no-cache-dir --no-binary scipy \
