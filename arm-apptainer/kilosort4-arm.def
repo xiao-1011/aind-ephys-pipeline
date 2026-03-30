@@ -1,9 +1,7 @@
 # KiloSort4 container for ARM64 (NVIDIA GH200 / Grace Hopper)
 #
 # Build on Dardel gh node:
-#   apptainer build --mksquashfs-args "-comp lz4" \
-#     /cfs/klemming/projects/supr/dmclab/apptainer_cachedir/kilosort4-arm.sif \
-#     kilosort4-arm.def
+#   sbatch build-ks4.sh
 #
 # NOTE: --mksquashfs-args "-comp lz4" is required — GH200 compute nodes only
 # support lz4, not the default zlib compression.
@@ -30,31 +28,25 @@ From: nvcr.io/nvidia/pytorch:26.02-py3
 
     # ── Fix ALL OpenBLAS instances for GH200 (288 hardware threads) ──────
     #
-    # The container has MULTIPLE OpenBLAS shared libraries:
-    #   1. scipy.libs/libscipy_openblas*.so  (scipy_ symbol prefix)
-    #   2. System/numpy libopenblas.so        (standard symbol prefix)
+    # The container has FOUR OpenBLAS shared libraries:
+    #   1. scipy.libs/libscipy_openblas*.so        (scipy_ prefix, replaced by Part A)
+    #   2. numpy.libs/libopenblas64_p*.so           (ILP64 — 64-bit integer BLAS)
+    #   3. faiss_cpu.libs/libopenblas*.so            (LP64  — 32-bit integer BLAS)
+    #   4. scipy_openblas32/lib/libscipy_openblas.so (the good 0.3.31 copy)
     #
-    # Old OpenBLAS (< 0.3.28) fatally aborts when detected CPU count exceeds
-    # the compile-time MAX_THREADS.  On GH200 nodes with 288 CPU threads, a
-    # library built with MAX_THREADS=128 only has 256 buffer slots → crash.
+    # Libraries 2 & 3 are old (<0.3.28) and fatally abort on GH200 when the
+    # detected CPU count (288) exceeds compile-time MAX_THREADS.
     #
-    # OpenBLAS 0.3.31 fixes this (auxiliary-array fallback) AND fixes the
-    # NEOVERSEN2 sgemm_incopy segfault.
-    #
-    # Strategy:
-    #   A) Replace scipy-prefixed .so with scipy-openblas32's 0.3.31 copy
-    #   B) Build OpenBLAS 0.3.31 from source (NUM_THREADS=512) to replace
-    #      ALL standard-symbol libopenblas (system + packages)
-    #   C) LD_PRELOAD as safety net (in %environment)
+    # Fix: build OpenBLAS 0.3.31 from source in BOTH LP64 and ILP64 variants
+    # (NUM_THREADS=512) and replace every bundled copy with the matching one.
 
-    # ── Diagnose: show BEFORE state ──
+    # ── Diagnose: BEFORE state ──
     echo "=== OpenBLAS libraries BEFORE fix ==="
     find / \( -name 'libopenblas*' -o -name 'libscipy_openblas*' \) \
         -not -path '*/proc/*' 2>/dev/null | sort || true
-    python -c "import numpy; print('numpy linked BLAS:', numpy.show_config())" 2>&1 | head -30 || true
     echo "======================================"
 
-    # ── A: Replace all scipy-prefixed OpenBLAS in site-packages ──
+    # ── Part A: Replace scipy-prefixed OpenBLAS ──
     python -c "
 import glob, os, shutil, site, scipy_openblas32
 
@@ -69,53 +61,63 @@ for sp in site.getsitepackages():
         shutil.copy2(good, lib)
 "
 
-    # ── B: Build OpenBLAS 0.3.31 from source (standard prefix) ──
-    echo "=== Checking build tools ==="
-    echo "gcc: $(command -v gcc 2>/dev/null || echo MISSING)"
-    echo "make: $(command -v make 2>/dev/null || echo MISSING)"
-    echo "gfortran: $(command -v gfortran 2>/dev/null || echo MISSING)"
-
-    if ! command -v gcc &>/dev/null || ! command -v make &>/dev/null; then
-        echo "ERROR: gcc or make not found — cannot build OpenBLAS from source"
-        echo "Attempting apt-get install as fallback..."
-        apt-get update -qq && apt-get install -y -qq build-essential gfortran || true
-    fi
-
-    echo "=== Building OpenBLAS 0.3.31 from source (NUM_THREADS=512) ==="
+    # ── Part B: Build OpenBLAS 0.3.31 — LP64 and ILP64 variants ──
+    echo "=== Downloading OpenBLAS 0.3.31 ==="
     cd /tmp
-    # Try curl first, fall back to wget, then Python
     curl -sL -o OpenBLAS-0.3.31.tar.gz \
         https://github.com/OpenMathLib/OpenBLAS/releases/download/v0.3.31/OpenBLAS-0.3.31.tar.gz 2>/dev/null \
     || wget -q -O OpenBLAS-0.3.31.tar.gz \
         https://github.com/OpenMathLib/OpenBLAS/releases/download/v0.3.31/OpenBLAS-0.3.31.tar.gz 2>/dev/null \
     || python -c "import urllib.request; urllib.request.urlretrieve('https://github.com/OpenMathLib/OpenBLAS/releases/download/v0.3.31/OpenBLAS-0.3.31.tar.gz', 'OpenBLAS-0.3.31.tar.gz')"
-
     tar xf OpenBLAS-0.3.31.tar.gz
     cd OpenBLAS-0.3.31
 
-    if command -v gfortran &>/dev/null; then
-        make -j$(nproc) NUM_THREADS=512 USE_OPENMP=0 2>&1 | tail -10
-    else
-        echo "No gfortran — building without LAPACK"
-        make -j$(nproc) NUM_THREADS=512 USE_OPENMP=0 NO_LAPACK=1 NO_LAPACKE=1 2>&1 | tail -10
-    fi
-    make PREFIX=/usr/local install 2>&1 | tail -5
+    FFLAGS=""
+    command -v gfortran &>/dev/null || FFLAGS="NO_LAPACK=1 NO_LAPACKE=1"
 
-    # Verify the build produced a library
-    ls -la /usr/local/lib/libopenblas* || echo "WARNING: source build may have failed"
+    # Build 1: LP64 (32-bit integers) — for faiss-cpu and system use
+    echo "=== Building LP64 variant ==="
+    make -j$(nproc) NUM_THREADS=512 USE_OPENMP=0 $FFLAGS 2>&1 | tail -5
+    cp -v $(find . -maxdepth 1 -name 'libopenblas*.so' -not -type l | head -1) /tmp/libopenblas_lp64.so
+    make PREFIX=/usr/local install 2>&1 | tail -3
+    make clean 2>&1 | tail -1
 
-    # Replace ALL standard-symbol libopenblas everywhere (not just /usr/lib)
-    echo "=== Replacing all standard-symbol OpenBLAS ==="
-    find / \( -name 'libopenblas*.so' -o -name 'libopenblas*.so.*' \) \
-        -not -type l -not -path '*/proc/*' -not -path '/usr/local/lib/*' \
-        -not -path '*/scipy_openblas32/*' 2>/dev/null | while read lib; do
-        echo "  Replacing: $lib ($(stat -c%s "$lib") bytes)"
-        cp /usr/local/lib/libopenblas.so "$lib"
-    done
+    # Build 2: ILP64 (64-bit integers) — for numpy
+    echo "=== Building ILP64 variant ==="
+    make -j$(nproc) NUM_THREADS=512 USE_OPENMP=0 INTERFACE64=1 $FFLAGS 2>&1 | tail -5
+    cp -v $(find . -maxdepth 1 -name 'libopenblas*.so' -not -type l | head -1) /tmp/libopenblas_ilp64.so
+
+    echo ""
+    ls -lh /tmp/libopenblas_lp64.so /tmp/libopenblas_ilp64.so
+
+    # ── Part C: Replace ALL bundled OpenBLAS in site-packages ──
+    echo "=== Replacing bundled OpenBLAS libraries ==="
+    python -c "
+import glob, os, shutil, site
+
+lp64  = '/tmp/libopenblas_lp64.so'
+ilp64 = '/tmp/libopenblas_ilp64.so'
+
+for sp in site.getsitepackages():
+    for lib in glob.glob(os.path.join(sp, '**', 'libopenblas*.so'), recursive=True):
+        if '/scipy_openblas32/' in lib:
+            continue
+        # numpy's ILP64 library has '64' in its name
+        basename = os.path.basename(lib)
+        if '64' in basename:
+            src, variant = ilp64, 'ILP64'
+        else:
+            src, variant = lp64, 'LP64'
+        print(f'  [{variant}] {lib}')
+        print(f'    old: {os.path.getsize(lib)} bytes')
+        shutil.copy2(src, lib)
+        print(f'    new: {os.path.getsize(lib)} bytes')
+"
 
     ldconfig
     cd /
-    rm -rf /tmp/OpenBLAS-0.3.31 /tmp/OpenBLAS-0.3.31.tar.gz
+    rm -rf /tmp/OpenBLAS-0.3.31 /tmp/OpenBLAS-0.3.31.tar.gz \
+           /tmp/libopenblas_lp64.so /tmp/libopenblas_ilp64.so
 
     # ── Verify ──
     echo "=== OpenBLAS libraries AFTER fix ==="
@@ -130,8 +132,8 @@ for sp in site.getsitepackages():
 %environment
     export DEBIAN_FRONTEND=noninteractive
     export OPENBLAS_NUM_THREADS=64
-    # Safety net: ensure the source-built OpenBLAS takes precedence for any
-    # standard-symbol BLAS calls that might still resolve to the old library.
+    # Safety net: source-built LP64 library takes precedence for any
+    # standard-symbol BLAS calls not resolved via RPATH.
     export LD_PRELOAD=/usr/local/lib/libopenblas.so
 
 %runscript

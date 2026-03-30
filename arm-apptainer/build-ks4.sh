@@ -125,7 +125,37 @@ print('PASS')
 "
 echo ""
 
-echo "=== Test 5: sklearn KMeans (the actual crash point) ==="
+echo "=== Test 5: verify numpy/faiss OpenBLAS were actually replaced ==="
+$RUN python -c "
+import os, site, glob
+
+# These must NOT have the old file sizes from the build log
+old_sizes = {
+    'libopenblas64_p': 25804257,   # numpy's old 0.3.23
+    'libopenblas-r0':  10044585,   # faiss's old 0.3.15
+}
+
+replaced = 0
+for sp in site.getsitepackages():
+    for lib in glob.glob(os.path.join(sp, '**', 'libopenblas*.so'), recursive=True):
+        if 'scipy_openblas32' in lib:
+            continue
+        size = os.path.getsize(lib)
+        basename = os.path.basename(lib)
+        print(f'  {basename}: {size} bytes')
+        for key, old_size in old_sizes.items():
+            if key in basename and size == old_size:
+                print(f'    ERROR: still has old size — NOT replaced!')
+                raise RuntimeError(f'{lib} was not replaced')
+        replaced += 1
+
+assert replaced >= 2, f'Expected >= 2 replacements, got {replaced}'
+print(f'{replaced} libraries verified as replaced')
+print('PASS')
+"
+echo ""
+
+echo "=== Test 6: sklearn KMeans (the actual crash point) ==="
 $RUN python -c "
 from sklearn.cluster import KMeans
 import numpy as np
@@ -137,7 +167,7 @@ print('PASS')
 "
 echo ""
 
-echo "=== Test 6: kilosort + spikeinterface import ==="
+echo "=== Test 7: kilosort + spikeinterface import ==="
 $RUN python -c "
 import kilosort
 import spikeinterface
@@ -147,7 +177,7 @@ print('PASS')
 "
 echo ""
 
-echo "=== Test 7: CUDA available ==="
+echo "=== Test 8: CUDA available ==="
 $RUN python -c "
 import torch
 print(f'torch {torch.__version__}')
