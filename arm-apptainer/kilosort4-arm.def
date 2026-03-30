@@ -20,33 +20,35 @@ From: nvcr.io/nvidia/pytorch:26.02-py3
 %post
     export DEBIAN_FRONTEND=noninteractive
 
-    # The NGC base image ships scipy 1.17.0 whose PyPI binary wheel bundles
-    # OpenBLAS with a NEOVERSEN2 kernel compiled with MAX_THREADS=128.
-    # GH200 Grace has 288 hw threads → OpenBLAS segfaults at init.
-    #
-    # Fix: remove the bundled-OpenBLAS scipy, install scipy-openblas32 (pip
-    # package providing OpenBLAS + pkg-config for the build system), then
-    # rebuild scipy from source so it links against that shared library
-    # instead of statically bundling the broken one.
-    pip uninstall -y scipy
-
-    # Provide BLAS for scipy's meson build system
+    # scipy-openblas32 provides OpenBLAS 0.3.31 (MAX_THREADS=64) which
+    # does not crash on GH200 Grace (288 hw threads).
     pip install --no-cache-dir scipy-openblas32
 
-    # get_pkg_config() returns the .pc file CONTENT, not a path.
-    # Write it to a file so meson can find it via pkg-config.
-    mkdir -p /usr/local/lib/pkgconfig
-    python -c "import scipy_openblas32; print(scipy_openblas32.get_pkg_config())" \
-        > /usr/local/lib/pkgconfig/scipy-openblas.pc
-    export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig
-
-    # Build scipy from source + install the rest of the stack
-    pip install --no-cache-dir --no-binary scipy \
-        scipy \
+    # Install everything normally — no source build needed.
+    pip install --no-cache-dir \
         kilosort==4.0.38 \
         spikeinterface[full]==0.103.0 \
         "aind-data-schema<2.0" \
         aind-log-utils==0.2.3
+
+    # The scipy binary wheel bundles a broken OpenBLAS whose NEOVERSEN2
+    # kernel segfaults on GH200 (sgemm_incopy_NEOVERSEN2 crash).
+    # Replace it with the working library from scipy-openblas32.
+    python -c "
+import glob, os, shutil, scipy, scipy_openblas32
+
+scipy_libs = os.path.join(os.path.dirname(scipy.__file__), '..', 'scipy.libs')
+broken = glob.glob(os.path.join(scipy_libs, 'libscipy_openblas*.so'))
+good = os.path.join(os.path.dirname(scipy_openblas32.__file__), 'lib', 'libscipy_openblas.so')
+
+if not broken:
+    raise FileNotFoundError('No libscipy_openblas*.so in ' + scipy_libs)
+
+for lib in broken:
+    print(f'Replacing {lib} ({os.path.getsize(lib)} bytes)')
+    print(f'     with {good} ({os.path.getsize(good)} bytes)')
+    shutil.copy2(good, lib)
+"
 
 %environment
     export DEBIAN_FRONTEND=noninteractive
