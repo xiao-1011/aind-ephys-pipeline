@@ -36,10 +36,13 @@ def curate_analyzer(analyzer_folder: Path, thresholds: dict) -> Path:
     """Apply thresholds to quality metrics and write curation_{sorter}.json."""
     sorter_name = analyzer_folder.name.replace("analyzer_", "", 1)
 
-    qm_csv = analyzer_folder / "extensions" / "quality_metrics" / "quality_metrics.csv"
+    # SI ≥0.103 uses "metrics.csv"; older versions used "quality_metrics.csv"
+    qm_csv = analyzer_folder / "extensions" / "quality_metrics" / "metrics.csv"
+    if not qm_csv.is_file():
+        qm_csv = analyzer_folder / "extensions" / "quality_metrics" / "quality_metrics.csv"
     if not qm_csv.is_file():
         raise FileNotFoundError(
-            f"Quality metrics not found at: {qm_csv}\n"
+            f"Quality metrics not found at: {analyzer_folder / 'extensions' / 'quality_metrics'}\n"
             "Please run 03-analyze.py first."
         )
 

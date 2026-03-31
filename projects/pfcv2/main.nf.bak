@@ -164,28 +164,21 @@ process COMPARE {
     """
 }
 
-// ANALYZE runs per-sorter (one SLURM job each) instead of one serial job for
-// all sorters. Same core-hours, ~4x faster wall-clock, smaller memory footprint.
-// The script already supports --sorter_folder for single-sorter mode.
-// To revert to serial: restore main.nf.bak + nextflow.config.bak, or
-// remove --sorter_folder and change input to path(sorter_dirs) with groupTuple.
 process ANALYZE {
-    tag "${session}/${probe}/${sorter_dir.name}"
+    tag "${session}/${probe}"
 
     publishDir "${params.results_path}/${session}/${probe}",
                mode: params.publish_mode, overwrite: true
 
     input:
-    tuple val(session), val(probe), val(duration_minutes),
-          path('preprocessed'), path(sorter_dir)
+    tuple val(session), val(probe), val(duration_minutes), path('preprocessed'), path(sorter_dirs)
 
     output:
-    tuple val(session), val(probe), val(duration_minutes),
-          path('analyzer_*'), emit: analyzer
+    tuple val(session), val(probe), val(duration_minutes), path('analyzer_*'), emit: analyzers
 
     script:
     """
-    python ${projectDir}/scripts/03-analyze.py . --sorter_folder ${sorter_dir}
+    python ${projectDir}/scripts/03-analyze.py .
     """
 }
 
@@ -239,14 +232,11 @@ process NWB_EXPORT {
 // DAG (per probe, all parallel across probes):
 //
 //   PREPROCESS
-//     ├─→ SORT_KS4  (GPU, required) ─→ ANALYZE ─→ ┐
-//     ├─→ SORT_SC2  (CPU, required) ─→ ANALYZE ─→ ┤─→ CURATE ─→ NWB_EXPORT
-//     ├─→ SORT_MS5  (CPU, optional) ─→ ANALYZE ─→ ┤
-//     └─→ SORT_TDC2 (CPU, optional) ─→ ANALYZE ─→ ┘
-//                                  └─→ COMPARE ────┘
-//
-// ANALYZE runs one SLURM job per sorter (4 parallel jobs per probe) rather
-// than one serial job. Same core-hours, ~4x faster wall-clock.
+//     ├─→ SORT_KS4  (GPU, required) ─→ ┐
+//     ├─→ SORT_SC2  (CPU, required) ─→ ┤─→ COMPARE ─→ ┐
+//     ├─→ SORT_MS5  (CPU, optional) ─→ ┤               │
+//     └─→ SORT_TDC2 (CPU, optional) ─→ ┘               │
+//                                       └─→ ANALYZE ─→ CURATE ─→ NWB_EXPORT
 //
 // MountainSort5 and Tridesclous2 use errorStrategy 'ignore' — if they fail,
 // the pipeline continues with whichever sorters succeeded.
@@ -267,41 +257,30 @@ workflow {
     sort_ms5_out  = SORT_MS5(preprocess_out.preprocessed)
     sort_tdc2_out = SORT_TDC2(preprocess_out.preprocessed)
 
-    // ── COMPARE: needs all sorters grouped ──────────────────────────────
-    // Collect all successful sorter outputs per probe for comparison.
-    // Failed sorters (errorStrategy 'ignore') simply don't emit.
+    // Collect all successful sorter outputs per probe.
+    // Failed sorters (errorStrategy 'ignore') simply don't emit — the group
+    // contains only the sorters that succeeded.
+    // groupTuple by [0,1,2] keeps (session, probe, duration_minutes) as keys,
+    // only the sorter_dir (position 3) is grouped into a list.
     all_sorters = sort_ks4_out.sorter
         .mix(sort_sc2_out.sorter, sort_ms5_out.sorter, sort_tdc2_out.sorter)
         .groupTuple(by: [0, 1, 2])
     // Emits: (session, probe, duration_minutes, [sorter_dir1, sorter_dir2, ...])
 
+    // COMPARE: 06-compare.py discovers all sorter_* dirs automatically
     compare_out = COMPARE(all_sorters)
 
-    // ── ANALYZE: one SLURM job per sorter (parallel) ────────────────────
-    // Mix individual sorter outputs (not grouped) and combine with
-    // preprocessed recording. Each sorter gets its own ANALYZE job.
-    all_sorter_individual = sort_ks4_out.sorter
-        .mix(sort_sc2_out.sorter, sort_ms5_out.sorter, sort_tdc2_out.sorter)
-    // Each item: (session, probe, duration_minutes, sorter_dir)
-
+    // ANALYZE: 03-analyze.py discovers all sorter_* dirs automatically
     analyze_in = preprocess_out.preprocessed
-        .combine(all_sorter_individual, by: [0, 1, 2])
-    // Emits: (session, probe, dur, preprocessed, sorter_dir) — one per sorter
-
+        .join(all_sorters, by: [0, 1, 2])
     analyze_out = ANALYZE(analyze_in)
-    // Runs 4 parallel SLURM jobs per probe
 
-    // Collect all analyzer outputs per probe for downstream steps
-    all_analyzers = analyze_out.analyzer
-        .groupTuple(by: [0, 1, 2])
-    // Emits: (session, probe, dur, [analyzer_dir1, analyzer_dir2, ...])
-
-    // ── CURATE: 04-curate.py discovers all analyzer_* dirs automatically
-    curate_in = all_analyzers
+    // CURATE: 04-curate.py discovers all analyzer_* dirs automatically
+    curate_in = analyze_out.analyzers
         .join(compare_out.consensus, by: [0, 1, 2])
     curate_out = CURATE(curate_in)
 
-    // ── NWB_EXPORT: 05-export-nwb.py discovers all curation_*.json files
+    // NWB_EXPORT: 05-export-nwb.py discovers all curation_*.json files automatically
     nwb_in = preprocess_out.preprocessed
         .join(all_sorters, by: [0, 1, 2])
         .join(curate_out.curation, by: [0, 1, 2])

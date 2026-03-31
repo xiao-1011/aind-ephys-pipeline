@@ -19,7 +19,6 @@ params {
     // Queues
     default_queue = 'main'
     gpu_queue     = 'gpugh'
-    shared_queue  = 'shared'   // lightweight jobs (COMPARE, CURATE, NWB_EXPORT)
 
     // Curation thresholds (override via --curation_isi_max etc. on the CLI)
     curation_isi_max              = 0.5
@@ -64,36 +63,18 @@ if (hasApptainer) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Resource allocation strategy for NAISS Dardel
-//
-// Dardel partitions (sinfo output, 2026-03-31):
-//   main     988 nodes  256 cores  ~232 GB  whole-node (exclusive)
-//   shared    96 nodes  256 cores  ~232 GB  per-core (shared)
-//   memory   302 nodes  256 cores  ~483 GB  whole-node
-//   gpu       62 nodes  128 cores  ~483 GB  whole-node
-//
-// On `main`, every job gets an entire node regardless of requested resources.
-// Requesting less memory than the node has doesn't help scheduling — it just
-// means the rest goes unused. So compute-heavy processes request 230 GB
-// (full node minus OS overhead) to let them use all available RAM.
-//
-// Lightweight processes (COMPARE, CURATE, NWB_EXPORT) run on `shared` where
-// multiple jobs share a node. This avoids wasting whole nodes for jobs that
-// need <5 GB and finish in seconds, and they schedule faster since they
-// don't compete for exclusive node slots.
+// Process defaults and per-process overrides
 //
 // Time allocations scale with recording duration (duration_minutes from
-// the .ap.meta channel). Each process uses a multiplier with a minimum
-// floor to handle short recordings. Multipliers calibrated on a 107-min
-// recording (999770_day1_1_g0):
+// the .ap.meta channel). Each process uses a multiplier of the recording
+// length with a minimum floor to handle short recordings gracefully.
 //
-//   Process      Multiplier  Observed (107 min)  Headroom
-//   PREPROCESS   1x          26 min              ~4x
-//   SORT_KS4     2x          43 min              ~5x
-//   SORT_SC2     3x          65 min              ~5x
-//   SORT_MS5     5x          135 min             ~4x
-//   SORT_TDC2    3x          68 min              ~5x
-//   ANALYZE      2x          ~40 min/sorter      ~5x (per-sorter parallel)
+// Multipliers calibrated on a 107-min recording (999770_day1_1_g0):
+//   PREPROCESS 0.24x → 1x (4.1x headroom)
+//   SORT_KS4   0.40x → 2x (5.0x headroom)
+//   SORT_SC2   0.61x → 3x (4.9x headroom)
+//   SORT_MS5   1.26x → 5x (4.0x headroom)
+//   SORT_TDC2  0.64x → 3x (4.7x headroom)
 // ─────────────────────────────────────────────────────────────────────────────
 
 process {
@@ -106,7 +87,7 @@ process {
     withName: PREPROCESS {
         container = params.cpu_sif
         cpus      = 20
-        memory    = '230 GB'
+        memory    = '64 GB'
         time      = { Math.max(30, (duration_minutes as int) * 1) + 'm' }
     }
 
@@ -127,21 +108,21 @@ process {
     withName: SORT_SC2 {
         container = params.cpu_sif
         cpus      = 20
-        memory    = '230 GB'
+        memory    = '180 GB'
         time      = { Math.max(30, (duration_minutes as int) * 3) + 'm' }
     }
 
     withName: SORT_MS5 {
         container = params.ms5_sif
         cpus      = 20
-        memory    = '230 GB'
+        memory    = '64 GB'
         time      = { Math.max(60, (duration_minutes as int) * 5) + 'm' }
     }
 
     withName: SORT_TDC2 {
         container = params.cpu_sif
         cpus      = 20
-        memory    = '230 GB'
+        memory    = '80 GB'
         time      = { Math.max(30, (duration_minutes as int) * 3) + 'm' }
     }
 
@@ -150,18 +131,13 @@ process {
         cpus      = 4
         memory    = '16 GB'
         time      = '30m'
-        queue     = params.shared_queue
     }
 
-    // ANALYZE runs per-sorter (4 parallel jobs instead of 1 serial).
-    // Serial ANALYZE peaked at 378 GB RSS across all 4 sorters; per-sorter
-    // estimated ~100-150 GB. 230 GB = full main-node memory.
-    // To revert to serial: restore main.nf.bak + nextflow.config.bak
     withName: ANALYZE {
         container = params.cpu_sif
         cpus      = 20
-        memory    = '230 GB'
-        time      = { Math.max(60, (duration_minutes as int) * 2) + 'm' }
+        memory    = '128 GB'
+        time      = { Math.max(60, (duration_minutes as int) * 5) + 'm' }
     }
 
     withName: CURATE {
@@ -169,7 +145,6 @@ process {
         cpus      = 4
         memory    = '16 GB'
         time      = '15m'
-        queue     = params.shared_queue
     }
 
     withName: NWB_EXPORT {
@@ -177,7 +152,6 @@ process {
         cpus      = 4
         memory    = '16 GB'
         time      = { Math.max(30, (duration_minutes as int) * 2) + 'm' }
-        queue     = params.shared_queue
     }
 }
 
