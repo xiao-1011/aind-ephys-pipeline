@@ -24,15 +24,15 @@ COMPUTE_EXTENSIONS = {
 # Files that are characteristic of a raw Kilosort output folder
 KILOSORT_RAW_FILES = {"spike_times.npy", "spike_clusters.npy", "cluster_group.tsv"}
 
-# SpikeInterface saves this file to identify its own sorter outputs
-SI_SORTER_MARKER = "spikeinterface_info.json"
+# SpikeInterface sorter output markers (varies by SI version)
+SI_SORTER_MARKERS = ["spikeinterface_log.json", "spikeinterface_info.json"]
 
 # SpikeGLX recordings contain .meta files
 SPIKEGLX_MARKER = ".ap.meta"
 
 
 def is_si_sorter_folder(folder: Path) -> bool:
-    return (folder / SI_SORTER_MARKER).is_file()
+    return any((folder / m).is_file() for m in SI_SORTER_MARKERS)
 
 
 def is_external_kilosort_folder(folder: Path) -> bool:
@@ -88,7 +88,7 @@ def load_sorting_and_recording(
     """
     if is_si_sorter_folder(sorter_folder):
         print(f"  Loading SI sorter object from: {sorter_folder.name}")
-        sorting = si.load_extractor(sorter_folder)
+        sorting = si.read_sorter_folder(sorter_folder)
 
         preprocessed_folder = sorter_folder.parent / "preprocessed"
         if not preprocessed_folder.is_dir():
@@ -124,7 +124,7 @@ def load_sorting_and_recording(
     raise ValueError(
         f"Cannot identify the contents of '{sorter_folder}' as either a SpikeInterface sorter "
         f"output or a raw Kilosort output.\n"
-        f"Expected either '{SI_SORTER_MARKER}' (SI) or {KILOSORT_RAW_FILES} (raw Kilosort)."
+        f"Expected either {SI_SORTER_MARKERS} (SI) or {KILOSORT_RAW_FILES} (raw Kilosort)."
     )
 
 
