@@ -11,10 +11,11 @@
 
 #SBATCH -A naiss2026-3-127
 #SBATCH -t 12:00:00
-#SBATCH --nodes=1
-#SBATCH --ntasks-per-node=1
+#SBATCH -n 1
+#SBATCH --cpus-per-task=2
+#SBATCH --mem=8G
 #SBATCH -J pfcv2-ephys-pipeline
-#SBATCH -p main
+#SBATCH -p shared
 
 set -euo pipefail
 
