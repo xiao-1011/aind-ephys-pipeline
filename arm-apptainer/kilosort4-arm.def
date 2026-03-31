@@ -44,6 +44,10 @@ From: nvcr.io/nvidia/pytorch:26.02-py3
     echo "=== OpenBLAS libraries BEFORE fix ==="
     find / \( -name 'libopenblas*' -o -name 'libscipy_openblas*' \) \
         -not -path '*/proc/*' 2>/dev/null | sort || true
+    echo "--- *.libs/ directories (all contents) ---"
+    for d in /usr/local/lib/python3.12/dist-packages/*.libs; do
+        [ -d "$d" ] && echo "  $d:" && ls -1 "$d" 2>/dev/null | sed 's/^/    /'
+    done
     echo "======================================"
 
     # ── Part A: Replace scipy-prefixed OpenBLAS ──
@@ -119,6 +123,71 @@ for sp in site.getsitepackages():
     rm -rf /tmp/OpenBLAS-0.3.31 /tmp/OpenBLAS-0.3.31.tar.gz \
            /tmp/libopenblas_lp64.so /tmp/libopenblas_ilp64.so
 
+    # ── Part D: Fix missing shared library dependencies ──────────────────
+    # scipy's Fortran extensions (e.g., _fblas.so) reference auditwheel-
+    # hashed library names (e.g., libgfortran-daac5196.so.5.0.0) that may
+    # not be bundled if the base image installed scipy without full bundling.
+    # Fix: detect missing deps via ldd and copy system equivalents.
+    echo "=== Fixing missing shared library deps ==="
+    python -c "
+import subprocess, os, glob, shutil, site, re
+
+for sp in site.getsitepackages():
+    scipy_libs = os.path.join(sp, 'scipy.libs')
+    if not os.path.isdir(scipy_libs):
+        continue
+    fixed = 0
+    seen = set()
+    for ext_pattern in ['scipy/linalg/_fblas*.so', 'scipy/linalg/_flapack*.so',
+                        'scipy/special/_ufuncs*.so', 'scipy/sparse/linalg/_eigen/*/*.so']:
+        for so_file in glob.glob(os.path.join(sp, ext_pattern)):
+            try:
+                out = subprocess.check_output(['ldd', so_file], text=True, stderr=subprocess.STDOUT)
+            except Exception:
+                continue
+            for line in out.splitlines():
+                if 'not found' not in line:
+                    continue
+                needed = line.strip().split()[0]
+                if needed in seen:
+                    continue
+                seen.add(needed)
+                dest = os.path.join(scipy_libs, needed)
+                if os.path.exists(dest):
+                    continue
+                # Extract base name: libgfortran-daac5196.so.5.0.0 -> libgfortran
+                m = re.match(r'(lib\w+)-[0-9a-f]+\.so', needed)
+                base = m.group(1) if m else needed.split('.so')[0]
+                # Search system library paths for the real library
+                found = None
+                for d in ['/usr/lib/aarch64-linux-gnu', '/usr/lib', '/lib/aarch64-linux-gnu', '/lib']:
+                    candidates = [f for f in glob.glob(os.path.join(d, base + '.so*'))
+                                  if os.path.isfile(f) and not os.path.islink(f)]
+                    if candidates:
+                        found = sorted(candidates)[-1]
+                        break
+                if found:
+                    print(f'  {needed}: {found} -> {dest}')
+                    shutil.copy2(found, dest)
+                    fixed += 1
+                else:
+                    print(f'  WARNING: {needed} — no system equivalent found!')
+    print(f'{fixed} missing libraries fixed')
+"
+
+    # ── Build-time verification: catch import errors before creating SIF ──
+    echo "=== Verifying critical imports ==="
+    python -c "
+import scipy.linalg
+print('scipy.linalg import OK')
+import numpy as np
+a = np.random.randn(100, 100).astype(np.float32)
+print(f'numpy matmul OK: {(a @ a).shape}')
+import scipy.linalg as la
+q, r = la.qr(a.astype(np.float64))
+print(f'scipy QR OK: Q={q.shape}, R={r.shape}')
+"
+
     # ── Verify ──
     echo "=== OpenBLAS libraries AFTER fix ==="
     find / \( -name 'libopenblas*' -o -name 'libscipy_openblas*' \) \
@@ -126,6 +195,10 @@ for sp in site.getsitepackages():
         size=$(stat -c%s "$f" 2>/dev/null || echo "?")
         link=$(readlink "$f" 2>/dev/null || echo "")
         echo "  $f  ($size bytes) ${link:+-> $link}"
+    done
+    echo "--- *.libs/ directories AFTER fix (all contents) ---"
+    for d in /usr/local/lib/python3.12/dist-packages/*.libs; do
+        [ -d "$d" ] && echo "  $d:" && ls -lh "$d" 2>/dev/null | tail -n +2 | sed 's/^/    /'
     done
     echo "================================"
 

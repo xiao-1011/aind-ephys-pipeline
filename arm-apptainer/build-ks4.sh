@@ -79,8 +79,21 @@ echo ""
 
 BIND="--bind /cfs/klemming/projects/supr/dmclab:/cfs/klemming/projects/supr/dmclab"
 RUN="apptainer exec --nv $BIND $SIF_PATH"
+FAILURES=0
 
-echo "=== Test 1: Check OPENBLAS_NUM_THREADS is set ==="
+run_test() {
+    local name="$1"; shift
+    echo "=== $name ==="
+    if "$@"; then
+        echo ""
+    else
+        echo "FAIL ($name)"
+        echo ""
+        FAILURES=$((FAILURES + 1))
+    fi
+}
+
+run_test "Test 1: Check OPENBLAS_NUM_THREADS is set" \
 $RUN python -c "
 import os
 val = os.environ.get('OPENBLAS_NUM_THREADS', 'NOT SET')
@@ -88,9 +101,8 @@ print(f'OPENBLAS_NUM_THREADS = {val}')
 assert val == '64', f'Expected 64, got {val}'
 print('PASS')
 "
-echo ""
 
-echo "=== Test 2: LD_PRELOAD resolves ==="
+run_test "Test 2: LD_PRELOAD resolves" \
 $RUN python -c "
 import os, ctypes
 preload = os.environ.get('LD_PRELOAD', 'NOT SET')
@@ -100,9 +112,8 @@ if preload != 'NOT SET':
     print(f'Loaded OK: {lib}')
 print('PASS')
 "
-echo ""
 
-echo "=== Test 3: numpy SGEMM (triggers OpenBLAS init) ==="
+run_test "Test 3: numpy SGEMM (triggers OpenBLAS init)" \
 $RUN python -c "
 import numpy as np
 print(f'numpy {np.__version__}')
@@ -112,9 +123,8 @@ c = a @ b
 print(f'SGEMM result: shape={c.shape}, sum={c.sum():.1f}')
 print('PASS')
 "
-echo ""
 
-echo "=== Test 4: scipy BLAS ==="
+run_test "Test 4: scipy BLAS" \
 $RUN python -c "
 import scipy.linalg
 import numpy as np
@@ -123,9 +133,8 @@ q, r = scipy.linalg.qr(a)
 print(f'QR decomposition: Q={q.shape}, R={r.shape}')
 print('PASS')
 "
-echo ""
 
-echo "=== Test 5: verify numpy/faiss OpenBLAS were actually replaced ==="
+run_test "Test 5: verify numpy/faiss OpenBLAS were actually replaced" \
 $RUN python -c "
 import os, site, glob
 
@@ -153,9 +162,8 @@ assert replaced >= 2, f'Expected >= 2 replacements, got {replaced}'
 print(f'{replaced} libraries verified as replaced')
 print('PASS')
 "
-echo ""
 
-echo "=== Test 6: sklearn KMeans (the actual crash point) ==="
+run_test "Test 6: sklearn KMeans (the actual crash point)" \
 $RUN python -c "
 from sklearn.cluster import KMeans
 import numpy as np
@@ -165,9 +173,8 @@ km.fit(X)
 print(f'KMeans: {km.n_clusters} clusters, {km.n_iter_} iterations')
 print('PASS')
 "
-echo ""
 
-echo "=== Test 7: kilosort + spikeinterface import ==="
+run_test "Test 7: kilosort + spikeinterface import" \
 $RUN python -c "
 import kilosort
 import spikeinterface
@@ -175,9 +182,8 @@ print(f'kilosort {kilosort.__version__}')
 print(f'spikeinterface {spikeinterface.__version__}')
 print('PASS')
 "
-echo ""
 
-echo "=== Test 8: CUDA available ==="
+run_test "Test 8: CUDA available" \
 $RUN python -c "
 import torch
 print(f'torch {torch.__version__}')
@@ -189,7 +195,6 @@ if torch.cuda.is_available():
     print(f'GPU matmul OK: {r.shape}')
 print('PASS')
 "
-echo ""
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Cleanup
@@ -199,5 +204,11 @@ echo "=== Cleaning build cache ==="
 rm -rf "$APPTAINER_CACHEDIR" "$APPTAINER_TMPDIR"
 
 echo ""
-echo "=== All done: $(date) ==="
-echo "SIF ready at: $SIF_PATH"
+if [ $FAILURES -gt 0 ]; then
+    echo "=== DONE with $FAILURES FAILED test(s): $(date) ==="
+    echo "SIF at: $SIF_PATH (may not be reliable)"
+    exit 1
+else
+    echo "=== All 8 tests PASSED: $(date) ==="
+    echo "SIF ready at: $SIF_PATH"
+fi
