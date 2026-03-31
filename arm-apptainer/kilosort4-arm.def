@@ -84,7 +84,7 @@ for sp in site.getsitepackages():
 
     # Build 2: ILP64 (64-bit integers) — for numpy
     echo "=== Building ILP64 variant ==="
-    make -j$(nproc) NUM_THREADS=512 USE_OPENMP=0 INTERFACE64=1 $FFLAGS 2>&1 | tail -5
+    make -j$(nproc) NUM_THREADS=512 USE_OPENMP=0 INTERFACE64=1 SYMBOLSUFFIX=64_ $FFLAGS 2>&1 | tail -5
     cp -v $(find . -maxdepth 1 -name 'libopenblas*.so' -not -type l | head -1) /tmp/libopenblas_ilp64.so
 
     echo ""
