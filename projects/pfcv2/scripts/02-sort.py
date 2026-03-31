@@ -1,5 +1,58 @@
 from pathlib import Path
 import argparse
+import os, sys, subprocess, ctypes, tempfile
+
+# ── GH200 OpenBLAS fix ─────────────────────────────────────────────────
+# scipy_openblas32 (bundled in scipy.libs/) segfaults on GH200 ARM nodes
+# (288 cores > compile-time NUM_BUFFERS ~128). The crash occurs in
+# blas_memory_alloc's auxiliary-array fallback when multiple OpenMP threads
+# call SGEMM simultaneously (e.g., sklearn KMeans inside KiloSort4).
+#
+# Our LD_PRELOAD'd OpenBLAS 0.3.31 (built with NUM_THREADS=512) works
+# fine, but scipy uses prefixed symbols (scipy_sgemm_ etc.) that
+# LD_PRELOAD can't override.
+#
+# Fix: compile a thin shim that redirects scipy-prefixed BLAS calls to
+# the standard symbols resolved from our good LD_PRELOAD'd library.
+# Loaded with RTLD_GLOBAL before scipy imports so it wins symbol lookup.
+_BLAS_SHIM_SRC = r'''
+#define _GNU_SOURCE
+#include <dlfcn.h>
+#define FWD(ret,name,args,call) \
+  ret scipy_##name args { \
+    static ret (*f) args = 0; \
+    if(!f) f = dlsym(RTLD_DEFAULT, #name); \
+    if(f) return f call; \
+  }
+FWD(void, sgemm_, (char*a,char*b,int*m,int*n,int*k,float*al,float*A,int*la,float*B,int*lb,float*be,float*C,int*lc), (a,b,m,n,k,al,A,la,B,lb,be,C,lc))
+FWD(void, dgemm_, (char*a,char*b,int*m,int*n,int*k,double*al,double*A,int*la,double*B,int*lb,double*be,double*C,int*lc), (a,b,m,n,k,al,A,la,B,lb,be,C,lc))
+FWD(float, sdot_, (int*n,float*x,int*ix,float*y,int*iy), (n,x,ix,y,iy))
+FWD(double, ddot_, (int*n,double*x,int*ix,double*y,int*iy), (n,x,ix,y,iy))
+FWD(float, snrm2_, (int*n,float*x,int*ix), (n,x,ix))
+FWD(double, dnrm2_, (int*n,double*x,int*ix), (n,x,ix))
+FWD(void, sscal_, (int*n,float*a,float*x,int*ix), (n,a,x,ix))
+FWD(void, dscal_, (int*n,double*a,double*x,int*ix), (n,a,x,ix))
+FWD(void, saxpy_, (int*n,float*a,float*x,int*ix,float*y,int*iy), (n,a,x,ix,y,iy))
+FWD(void, daxpy_, (int*n,double*a,double*x,int*ix,double*y,int*iy), (n,a,x,ix,y,iy))
+'''
+
+def _load_blas_shim():
+    try:
+        src = tempfile.NamedTemporaryFile(suffix='.c', mode='w', delete=False)
+        src.write(_BLAS_SHIM_SRC)
+        src.close()
+        so = src.name.replace('.c', '.so')
+        subprocess.run(
+            ['gcc', '-shared', '-fPIC', '-O2', '-o', so, src.name, '-ldl'],
+            check=True, capture_output=True,
+        )
+        ctypes.CDLL(so, mode=ctypes.RTLD_GLOBAL)
+    except Exception as e:
+        print(f"WARNING: BLAS shim failed ({e}), scipy_openblas32 may crash",
+              file=sys.stderr, flush=True)
+
+_load_blas_shim()
+# ── End GH200 fix ──────────────────────────────────────────────────────
 
 import spikeinterface.full as si
 

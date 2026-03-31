@@ -1,37 +1,53 @@
 # Alternative fixes for KS4 ARM container issues
 
-## If Part D (ldd scan) stops working
+## Proper fix: build scipy-prefixed OpenBLAS with NUM_THREADS=512
 
-The current approach (Part D in kilosort4-arm.def) scans scipy's Fortran
-extensions with `ldd` to find missing shared libs (e.g., libgfortran) and
-copies the system equivalent into scipy.libs/.
+The current runtime workaround (BLAS shim in 02-sort.py) compiles a small
+C wrapper at startup that redirects `scipy_sgemm_` etc. to our good
+LD_PRELOAD'd OpenBLAS. This works but adds startup overhead and fragility.
 
-If this breaks, here's a simpler alternative: force-reinstall scipy from
-PyPI to get a complete manylinux wheel that bundles all its shared libs.
+The proper container-level fix: build OpenBLAS 0.3.31 with
+`SYMBOLPREFIX=scipy_` and `NUM_THREADS=512`, then replace scipy's bundled
+`libscipy_openblas-c5a9b014.so` with it. This eliminates the buggy
+auxiliary-array buffer path entirely.
+
+### Root cause
+
+scipy_openblas32 (from PyPI) is compiled with NUM_THREADS ~128. On GH200
+nodes (288 cores, with SLURM potentially assigning CPU numbers >= 128),
+OpenBLAS's `blas_memory_alloc` uses an auxiliary-array fallback that has a
+bug causing segfaults in `sgemm_incopy` when multiple OpenMP threads call
+SGEMM simultaneously (e.g., sklearn KMeans inside KiloSort4).
 
 ### Where to add it
 
-In kilosort4-arm.def `%post`, right after the main `pip install` block
-(after `aind-log-utils==0.2.3`), BEFORE the OpenBLAS fix sections:
+In kilosort4-arm.def `%post`, add a third build variant in Part B
+(after the ILP64 build), and a third replacement step in Part C:
 
 ```bash
-    # Force-reinstall scipy from PyPI to get a complete manylinux wheel.
-    # The NGC base image's pre-installed scipy may be missing bundled shared
-    # libs (e.g., libgfortran) in scipy.libs/ — the PyPI wheel includes them.
-    SCIPY_VER=$(python -c "import scipy; print(scipy.__version__)")
-    echo "=== Reinstalling scipy ${SCIPY_VER} from PyPI (complete wheel) ==="
-    pip install --no-cache-dir --force-reinstall --no-deps "scipy==${SCIPY_VER}"
+    # Build 3: LP64 with scipy_ symbol prefix — for scipy
+    echo "=== Building scipy-prefixed LP64 variant ==="
+    make clean 2>&1 | tail -1
+    make -j$(nproc) NUM_THREADS=512 USE_OPENMP=0 SYMBOLPREFIX=scipy_ $FFLAGS 2>&1 | tail -5
+    cp -v $(find . -maxdepth 1 -name 'libopenblas*.so' -not -type l | head -1) /tmp/libopenblas_scipy.so
 ```
 
-### Why it works
+Then in the Part C Python replacement script, add:
 
-- `--force-reinstall` downloads a fresh manylinux_2_17_aarch64 wheel from PyPI
-- That wheel bundles libgfortran, libgcc_s, libscipy_openblas in scipy.libs/
-- `--no-deps` prevents cascading reinstalls of other packages
-- Pinning `scipy==${SCIPY_VER}` keeps the exact same version
-- Part A then replaces the wheel's OpenBLAS with our good copy as usual
+```python
+    scipy_lib = '/tmp/libopenblas_scipy.so'
+    for sp in site.getsitepackages():
+        for lib in glob.glob(os.path.join(sp, '**', 'libscipy_openblas*.so'), recursive=True):
+            if '/scipy_openblas32/' in lib:
+                continue
+            print(f'  [scipy-prefix] {lib}')
+            print(f'    old: {os.path.getsize(lib)} bytes')
+            shutil.copy2(scipy_lib, lib)
+            print(f'    new: {os.path.getsize(lib)} bytes')
+```
 
-### If using this, Part D can be removed
+### Once applied
 
-The force-reinstall makes Part D redundant since scipy.libs/ will be
-complete from the wheel.
+Remove the BLAS shim from `projects/pfcv2/scripts/02-sort.py` (the
+`_BLAS_SHIM_SRC` / `_load_blas_shim()` block). Also remove Part A
+(the scipy_openblas32 replacement) since this new build replaces it.
