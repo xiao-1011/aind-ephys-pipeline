@@ -16,6 +16,7 @@
 #SBATCH -o build-ks4-%j.log
 
 set -euo pipefail
+trap 'rm -rf "$APPTAINER_TMPDIR" 2>/dev/null' EXIT
 
 echo "=== Build started: $(date) ==="
 echo "Job ID:   ${SLURM_JOB_ID}"
@@ -31,8 +32,11 @@ CACHE_BASE="/cfs/klemming/projects/supr/dmclab/ephys-pipeline-cache"
 SIF_PATH="${CACHE_BASE}/apptainer/kilosort4-arm.sif"
 DEF_PATH="${PIPELINE_PATH}/arm-apptainer/kilosort4-arm.def"
 
+# Use /tmp for build temp — faster than Lustre for small-file operations.
+# On GH200 nodes /tmp may be tmpfs or local NVMe; either is faster than Lustre.
+# Docker layer cache stays on Lustre (reusable across builds, large).
 export APPTAINER_CACHEDIR="${CACHE_BASE}/apptainer-build-cache"
-export APPTAINER_TMPDIR="${CACHE_BASE}/apptainer-build-tmp"
+export APPTAINER_TMPDIR="/tmp/apptainer-build-$$"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Setup
@@ -196,12 +200,7 @@ if torch.cuda.is_available():
 print('PASS')
 "
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Cleanup
-# ─────────────────────────────────────────────────────────────────────────────
-
-echo "=== Cleaning build cache ==="
-rm -rf "$APPTAINER_CACHEDIR" "$APPTAINER_TMPDIR"
+# Cleanup handled by EXIT trap
 
 echo ""
 if [ $FAILURES -gt 0 ]; then

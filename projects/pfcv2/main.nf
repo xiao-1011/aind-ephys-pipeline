@@ -28,8 +28,11 @@ def discoverProbes() {
             }
             def duration_min = Math.max(1, Math.ceil(duration_sec / 60.0) as int)
             def probe_dir = meta.parent
-            def session = probe_dir.parent.name
-            def probe   = probe_dir.name
+            // Use string parsing — Nextflow path objects don't chain
+            // .parent.name reliably (second .parent can resolve to Session object)
+            def parts   = probe_dir.toString().tokenize('/')
+            def session = parts[-2]
+            def probe   = parts[-1]
             tuple(session, probe, duration_min, probe_dir)
         }
         .unique { it[0..2] }  // deduplicate by session + probe + duration

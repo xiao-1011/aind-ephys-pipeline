@@ -53,6 +53,7 @@ export KACHERY_DIR="${CACHE_BASE}/kachery"
 export CPU_SIF="${NXF_APPTAINER_CACHEDIR}/aind-ephys-pipeline-base.sif"
 export MS5_SIF="${NXF_APPTAINER_CACHEDIR}/mountainsort5-cpu.sif"
 export LUPIN_SIF="${NXF_APPTAINER_CACHEDIR}/lupin.sif"
+export NWB_SIF="${NXF_APPTAINER_CACHEDIR}/nwb-export.sif"
 export GPU_SIF="${NXF_APPTAINER_CACHEDIR}/kilosort4-arm.sif"
 
 # Custom apptainer binary for GH200 (ARM) sorting nodes

@@ -1,16 +1,15 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────────────────────
-# Build Lupin sorter SIF on Dardel login node
+# Build MountainSort5 CPU SIF on Dardel login node
 #
-# Upgrades SpikeInterface from 0.103.0 to 0.104.0 (first version with lupin).
+# Adds mountainsort5 to the base container (SI 0.103.0).
 # CPU-only — no GPU or ARM node needed.
 #
 # Usage (login node):
-#   bash build-lupin.sh
+#   bash build-ms5.sh
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -euo pipefail
-trap 'rm -rf "$APPTAINER_TMPDIR" 2>/dev/null' EXIT
 
 echo "=== Build started: $(date) ==="
 echo "Node:     $(hostname)"
@@ -22,8 +21,8 @@ echo "Arch:     $(uname -m)"
 
 PIPELINE_PATH="/cfs/klemming/projects/supr/dmclab/aind-ephys-pipeline-pfc"
 CACHE_BASE="/cfs/klemming/projects/supr/dmclab/ephys-pipeline-cache"
-SIF_PATH="${CACHE_BASE}/apptainer/lupin.sif"
-DEF_PATH="${PIPELINE_PATH}/arm-apptainer/lupin.def"
+SIF_PATH="${CACHE_BASE}/apptainer/mountainsort5-cpu.sif"
+DEF_PATH="${PIPELINE_PATH}/arm-apptainer/mountainsort5-cpu.def"
 
 # Use /tmp (tmpfs, RAM-backed) for build temp — much faster than Lustre for
 # the thousands of small-file operations during pip install.
@@ -52,16 +51,15 @@ echo "=== Building SIF ==="
 
 [ -f "$SIF_PATH" ] && mv "$SIF_PATH" "${SIF_PATH}.bak"
 
-apptainer build "$SIF_PATH" "$DEF_PATH"
-
-BUILD_EXIT=$?
-if [ $BUILD_EXIT -ne 0 ]; then
+if apptainer build "$SIF_PATH" "$DEF_PATH"; then
+    rm -f "${SIF_PATH}.bak"
+else
+    BUILD_EXIT=$?
     echo "ERROR: apptainer build failed (exit $BUILD_EXIT)"
     [ -f "${SIF_PATH}.bak" ] && mv "${SIF_PATH}.bak" "$SIF_PATH"
+    rm -rf "$APPTAINER_TMPDIR"
     exit $BUILD_EXIT
 fi
-
-rm -f "${SIF_PATH}.bak"
 
 echo ""
 echo "=== Build succeeded: $(ls -lh "$SIF_PATH") ==="
@@ -78,31 +76,24 @@ echo "=== Test 1: SpikeInterface version ==="
 $RUN python -c "
 import spikeinterface
 print(f'spikeinterface {spikeinterface.__version__}')
-assert spikeinterface.__version__.startswith('0.104'), f'Expected 0.104.x, got {spikeinterface.__version__}'
 print('PASS')
 "
 
 echo ""
-echo "=== Test 2: Lupin sorter available ==="
+echo "=== Test 2: MountainSort5 available ==="
 $RUN python -c "
 from spikeinterface.sorters import available_sorters
-sorters = available_sorters()
-print(f'Available sorters: {sorters}')
-assert 'lupin' in sorters, f'lupin not in available sorters: {sorters}'
+assert 'mountainsort5' in available_sorters(), 'mountainsort5 not available'
 print('PASS')
 "
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Cleanup
+# ─────────────────────────────────────────────────────────────────────────────
 
 echo ""
-echo "=== Test 3: pynwb import (hdmf compatibility) ==="
-$RUN python -c "
-import pynwb
-import hdmf
-print(f'pynwb {pynwb.__version__}')
-print(f'hdmf  {hdmf.__version__}')
-print('PASS')
-"
-
-# Cleanup handled by EXIT trap
+echo "=== Cleaning build temp ==="
+rm -rf "$APPTAINER_TMPDIR"
 
 echo ""
 echo "=== All tests PASSED: $(date) ==="

@@ -10,6 +10,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -euo pipefail
+trap 'rm -rf "$APPTAINER_TMPDIR" 2>/dev/null' EXIT
 
 echo "=== Build started: $(date) ==="
 echo "Node:     $(hostname)"
@@ -94,13 +95,7 @@ print(f'neuroconv      {neuroconv.__version__}')
 print('PASS')
 "
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Cleanup
-# ─────────────────────────────────────────────────────────────────────────────
-
-echo ""
-echo "=== Cleaning build temp ==="
-rm -rf "$APPTAINER_TMPDIR"
+# Cleanup handled by EXIT trap
 
 echo ""
 echo "=== All tests PASSED: $(date) ==="
