@@ -18,7 +18,6 @@ nextflow.enable.dsl = 2
 def discoverProbes() {
     Channel
         .fromPath("${params.data_path}/**/*.ap.meta")
-        .view { "DEBUG raw meta path: ${it} | class: ${it.getClass().getName()} | toString: ${it.toString()}" }
         .map { meta ->
             // Parse fileTimeSecs from the SpikeGLX .meta file
             def duration_sec = 0
@@ -30,11 +29,10 @@ def discoverProbes() {
             def duration_min = Math.max(1, Math.ceil(duration_sec / 60.0) as int)
             def probe_dir = meta.parent
             def probe_str = probe_dir.toString()
-            def session  = file(probe_str).parent.name
-            def probe    = file(probe_str).name
-            tuple(session, probe, duration_min, probe_dir)
+            def sid   = file(probe_str).parent.name
+            def probe = file(probe_str).name
+            tuple(sid, probe, duration_min, probe_dir)
         }
-        .view { "DEBUG tuple: session=${it[0]} probe=${it[1]} dur=${it[2]}" }
         .unique { it[0..2] }  // deduplicate by session + probe + duration
 }
 
@@ -43,16 +41,16 @@ def discoverProbes() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 process PREPROCESS {
-    tag "${session}/${probe}"
+    tag "${sid}/${probe}"
 
-    publishDir "${params.results_path}/${session}/${probe}",
+    publishDir "${params.results_path}/${sid}/${probe}",
                mode: params.publish_mode, overwrite: true
 
     input:
-    tuple val(session), val(probe), val(duration_minutes), path(probe_dir)
+    tuple val(sid), val(probe), val(duration_minutes), path(probe_dir)
 
     output:
-    tuple val(session), val(probe), val(duration_minutes), path('preprocessed'), emit: preprocessed
+    tuple val(sid), val(probe), val(duration_minutes), path('preprocessed'), emit: preprocessed
     path 'motion_*',                                                             emit: motion, optional: true
 
     script:
@@ -64,16 +62,16 @@ process PREPROCESS {
 }
 
 process SORT_KS4 {
-    tag "${session}/${probe}"
+    tag "${sid}/${probe}"
 
-    publishDir "${params.results_path}/${session}/${probe}",
+    publishDir "${params.results_path}/${sid}/${probe}",
                mode: params.publish_mode, overwrite: true
 
     input:
-    tuple val(session), val(probe), val(duration_minutes), path('preprocessed')
+    tuple val(sid), val(probe), val(duration_minutes), path('preprocessed')
 
     output:
-    tuple val(session), val(probe), val(duration_minutes), path('sorter_kilosort4'), emit: sorter
+    tuple val(sid), val(probe), val(duration_minutes), path('sorter_kilosort4'), emit: sorter
 
     script:
     """
@@ -84,16 +82,16 @@ process SORT_KS4 {
 }
 
 process SORT_SC2 {
-    tag "${session}/${probe}"
+    tag "${sid}/${probe}"
 
-    publishDir "${params.results_path}/${session}/${probe}",
+    publishDir "${params.results_path}/${sid}/${probe}",
                mode: params.publish_mode, overwrite: true
 
     input:
-    tuple val(session), val(probe), val(duration_minutes), path('preprocessed')
+    tuple val(sid), val(probe), val(duration_minutes), path('preprocessed')
 
     output:
-    tuple val(session), val(probe), val(duration_minutes), path('sorter_spykingcircus2'), emit: sorter
+    tuple val(sid), val(probe), val(duration_minutes), path('sorter_spykingcircus2'), emit: sorter
 
     script:
     """
@@ -104,17 +102,17 @@ process SORT_SC2 {
 }
 
 process SORT_MS5 {
-    tag "${session}/${probe}"
+    tag "${sid}/${probe}"
     errorStrategy 'ignore'
 
-    publishDir "${params.results_path}/${session}/${probe}",
+    publishDir "${params.results_path}/${sid}/${probe}",
                mode: params.publish_mode, overwrite: true
 
     input:
-    tuple val(session), val(probe), val(duration_minutes), path('preprocessed')
+    tuple val(sid), val(probe), val(duration_minutes), path('preprocessed')
 
     output:
-    tuple val(session), val(probe), val(duration_minutes), path('sorter_mountainsort5'), emit: sorter
+    tuple val(sid), val(probe), val(duration_minutes), path('sorter_mountainsort5'), emit: sorter
 
     script:
     """
@@ -125,17 +123,17 @@ process SORT_MS5 {
 }
 
 process SORT_TDC2 {
-    tag "${session}/${probe}"
+    tag "${sid}/${probe}"
     errorStrategy 'ignore'
 
-    publishDir "${params.results_path}/${session}/${probe}",
+    publishDir "${params.results_path}/${sid}/${probe}",
                mode: params.publish_mode, overwrite: true
 
     input:
-    tuple val(session), val(probe), val(duration_minutes), path('preprocessed')
+    tuple val(sid), val(probe), val(duration_minutes), path('preprocessed')
 
     output:
-    tuple val(session), val(probe), val(duration_minutes), path('sorter_tridesclous2'), emit: sorter
+    tuple val(sid), val(probe), val(duration_minutes), path('sorter_tridesclous2'), emit: sorter
 
     script:
     """
@@ -146,17 +144,17 @@ process SORT_TDC2 {
 }
 
 process SORT_LUPIN {
-    tag "${session}/${probe}"
+    tag "${sid}/${probe}"
     errorStrategy 'ignore'
 
-    publishDir "${params.results_path}/${session}/${probe}",
+    publishDir "${params.results_path}/${sid}/${probe}",
                mode: params.publish_mode, overwrite: true
 
     input:
-    tuple val(session), val(probe), val(duration_minutes), path('preprocessed')
+    tuple val(sid), val(probe), val(duration_minutes), path('preprocessed')
 
     output:
-    tuple val(session), val(probe), val(duration_minutes), path('sorter_lupin'), emit: sorter
+    tuple val(sid), val(probe), val(duration_minutes), path('sorter_lupin'), emit: sorter
 
     script:
     """
@@ -167,16 +165,16 @@ process SORT_LUPIN {
 }
 
 process COMPARE {
-    tag "${session}/${probe}"
+    tag "${sid}/${probe}"
 
-    publishDir "${params.results_path}/${session}/${probe}",
+    publishDir "${params.results_path}/${sid}/${probe}",
                mode: params.publish_mode, overwrite: true
 
     input:
-    tuple val(session), val(probe), val(duration_minutes), path(sorter_dirs)
+    tuple val(sid), val(probe), val(duration_minutes), path(sorter_dirs)
 
     output:
-    tuple val(session), val(probe), val(duration_minutes), path('consensus_labels.json'), emit: consensus
+    tuple val(sid), val(probe), val(duration_minutes), path('consensus_labels.json'), emit: consensus
     path 'consensus_plots',                                                               emit: plots, optional: true
 
     script:
@@ -194,17 +192,17 @@ process COMPARE {
 // To revert to serial: restore main.nf.bak + nextflow.config.bak, or
 // remove --sorter_folder and change input to path(sorter_dirs) with groupTuple.
 process ANALYZE {
-    tag "${session}/${probe}/${sorter_dir.name}"
+    tag "${sid}/${probe}/${sorter_dir.name}"
 
-    publishDir "${params.results_path}/${session}/${probe}",
+    publishDir "${params.results_path}/${sid}/${probe}",
                mode: params.publish_mode, overwrite: true
 
     input:
-    tuple val(session), val(probe), val(duration_minutes),
+    tuple val(sid), val(probe), val(duration_minutes),
           path('preprocessed'), path(sorter_dir)
 
     output:
-    tuple val(session), val(probe), val(duration_minutes),
+    tuple val(sid), val(probe), val(duration_minutes),
           path('analyzer_*'), emit: analyzer
 
     script:
@@ -216,17 +214,17 @@ process ANALYZE {
 // ANALYZE_LUPIN uses the lupin container (SI 0.104.0) since it must read
 // lupin's sorting output format. Identical script to ANALYZE.
 process ANALYZE_LUPIN {
-    tag "${session}/${probe}/${sorter_dir.name}"
+    tag "${sid}/${probe}/${sorter_dir.name}"
 
-    publishDir "${params.results_path}/${session}/${probe}",
+    publishDir "${params.results_path}/${sid}/${probe}",
                mode: params.publish_mode, overwrite: true
 
     input:
-    tuple val(session), val(probe), val(duration_minutes),
+    tuple val(sid), val(probe), val(duration_minutes),
           path('preprocessed'), path(sorter_dir)
 
     output:
-    tuple val(session), val(probe), val(duration_minutes),
+    tuple val(sid), val(probe), val(duration_minutes),
           path('analyzer_*'), emit: analyzer
 
     script:
@@ -236,16 +234,16 @@ process ANALYZE_LUPIN {
 }
 
 process CURATE {
-    tag "${session}/${probe}"
+    tag "${sid}/${probe}"
 
-    publishDir "${params.results_path}/${session}/${probe}",
+    publishDir "${params.results_path}/${sid}/${probe}",
                mode: params.publish_mode, overwrite: true
 
     input:
-    tuple val(session), val(probe), val(duration_minutes), path(analyzer_dirs), path('consensus_labels.json')
+    tuple val(sid), val(probe), val(duration_minutes), path(analyzer_dirs), path('consensus_labels.json')
 
     output:
-    tuple val(session), val(probe), val(duration_minutes), path('curation_*.json'), emit: curation
+    tuple val(sid), val(probe), val(duration_minutes), path('curation_*.json'), emit: curation
 
     script:
     """
@@ -258,23 +256,23 @@ process CURATE {
 }
 
 process NWB_EXPORT {
-    tag "${session}/${probe}"
+    tag "${sid}/${probe}"
 
-    publishDir "${params.results_path}/${session}/${probe}",
+    publishDir "${params.results_path}/${sid}/${probe}",
                mode: params.publish_mode, overwrite: true
 
     input:
-    tuple val(session), val(probe), val(duration_minutes),
+    tuple val(sid), val(probe), val(duration_minutes),
           path('preprocessed'), path(sorter_dirs), path(curation_files)
 
     output:
-    tuple val(session), val(probe), path('*.nwb'), emit: nwb
+    tuple val(sid), val(probe), path('*.nwb'), emit: nwb
 
     script:
     """
     python ${projectDir}/scripts/05-export-nwb.py \\
         . \\
-        --session-id ${session} \\
+        --session-id ${sid} \\
         --probe-id   ${probe}
     """
 }
@@ -307,7 +305,7 @@ process NWB_EXPORT {
 workflow {
 
     probes_ch = discoverProbes()
-    probes_ch.view { session, probe, dur, _ -> "Discovered probe: ${session}/${probe} (${dur} min)" }
+    probes_ch.view { sid, probe, dur, _ -> "Discovered probe: ${sid}/${probe} (${dur} min)" }
 
     preprocess_out = PREPROCESS(probes_ch)
 
