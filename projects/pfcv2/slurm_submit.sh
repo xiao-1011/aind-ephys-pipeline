@@ -89,6 +89,29 @@ mkdir -p "${CACHE_BASE}/matplotlib"
 mkdir -p "${CACHE_BASE}/kachery"
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Pre-cache HuggingFace models (UnitRefine classifiers for advanced curation)
+# Compute nodes may lack internet — cache on the shared queue node at startup.
+# ─────────────────────────────────────────────────────────────────────────────
+
+_hf_noise_model="SpikeInterface/UnitRefine_noise_neural_classifier_lightweight"
+_hf_sua_model="SpikeInterface/UnitRefine_sua_mua_classifier_lightweight"
+
+if [ ! -d "${HF_HOME}/hub/models--SpikeInterface--UnitRefine_noise_neural_classifier_lightweight/snapshots" ] || \
+   [ ! -d "${HF_HOME}/hub/models--SpikeInterface--UnitRefine_sua_mua_classifier_lightweight/snapshots" ]; then
+    echo "Pre-caching HuggingFace UnitRefine models..."
+    apptainer exec \
+        --bind /cfs/klemming/projects/supr/dmclab:/cfs/klemming/projects/supr/dmclab \
+        "${LUPIN_SIF}" python3 -c "
+from huggingface_hub import snapshot_download
+snapshot_download('${_hf_noise_model}')
+snapshot_download('${_hf_sua_model}')
+print('HuggingFace models cached successfully')
+"
+else
+    echo "HuggingFace UnitRefine models already cached."
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Print run info
 # ─────────────────────────────────────────────────────────────────────────────
 
