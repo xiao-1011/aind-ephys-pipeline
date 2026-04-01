@@ -40,6 +40,15 @@ def short_name(name: str) -> str:
     return abbrevs.get(name, name)
 
 
+def load_sorting(folder):
+    """Load sorting from either SI sorter output or SI binary sorting folder."""
+    si_markers = ["spikeinterface_log.json", "spikeinterface_info.json"]
+    if any((folder / m).is_file() for m in si_markers):
+        return si.read_sorter_folder(folder)
+    # Fall back to si.load() for binary_folder format (e.g. sorting_clean_*)
+    return si.load(folder)
+
+
 def compute_combinatorial_consensus(names, sortings, match_map):
     """For every subset of >=2 sorters, compute per-sorter consensus counts.
 
@@ -311,14 +320,29 @@ def main():
         '--no-combinatorial', action='store_true',
         help='Skip combinatorial subset analysis and plots (only compute flat consensus)',
     )
+    parser.add_argument(
+        '--input-prefix', type=str, default='sorter_',
+        help='Prefix for input folders to discover (default: sorter_)',
+    )
+    parser.add_argument(
+        '--output-name', type=str, default='consensus_labels.json',
+        help='Name of output JSON file (default: consensus_labels.json)',
+    )
+    parser.add_argument(
+        '--plot-dir-name', type=str, default='consensus_plots',
+        help='Name of output plot directory (default: consensus_plots)',
+    )
     args = parser.parse_args()
 
     output_folder = Path(args.output_folder)
+    input_prefix = args.input_prefix
 
-    sorter_folders = sorted(f for f in output_folder.glob('sorter_*') if f.is_dir())
+    sorter_folders = sorted(
+        f for f in output_folder.glob(f'{input_prefix}*') if f.is_dir()
+    )
     if len(sorter_folders) < 2:
         raise ValueError(
-            f"Need at least 2 sorter_* folders for comparison, "
+            f"Need at least 2 {input_prefix}* folders for comparison, "
             f"found: {[f.name for f in sorter_folders]}"
         )
 
@@ -326,8 +350,8 @@ def main():
     sortings = []
     names = []
     for folder in sorter_folders:
-        name = folder.name.replace('sorter_', '', 1)
-        sorting = si.read_sorter_folder(folder)
+        name = folder.name.replace(input_prefix, '', 1)
+        sorting = load_sorting(folder)
         sortings.append(sorting)
         names.append(name)
         print(f"  {name}: {len(sorting.get_unit_ids())} units")
@@ -410,7 +434,7 @@ def main():
             print(f"    {label:40s}  mean={entry['mean_consensus_pct']}%  {' '.join(parts)}")
 
         # Generate plots
-        plot_dir = output_folder / "consensus_plots"
+        plot_dir = output_folder / args.plot_dir_name
         plot_dir.mkdir(exist_ok=True)
 
         print(f"\nGenerating plots -> {plot_dir}/")
@@ -424,7 +448,7 @@ def main():
         print("  upset_intersections.png")
 
     # ── Save JSON ────────────────────────────────────────────────────────
-    output_file = output_folder / 'consensus_labels.json'
+    output_file = output_folder / args.output_name
     with open(output_file, 'w') as f:
         json.dump(output, f, indent=2)
     print(f"\nConsensus labels saved to: {output_file}")

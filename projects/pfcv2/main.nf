@@ -233,6 +233,106 @@ process ANALYZE_LUPIN {
     """
 }
 
+// ADVANCED_CURATE runs per-sorter: redundant removal, UnitRefine noise
+// classification, auto-merge of split units, bombcell labels, SUA/MUA labels.
+// Produces a clean sorting (sorting_clean_*) for COMPARE_CLEAN and label JSONs.
+process ADVANCED_CURATE {
+    tag "${sid}/${probe}/${analyzer_dir.name}"
+
+    publishDir "${params.results_path}/${sid}/${probe}",
+               mode: params.publish_mode, overwrite: true
+
+    input:
+    tuple val(sid), val(probe), val(duration_minutes),
+          path('preprocessed'), path(analyzer_dir)
+
+    output:
+    tuple val(sid), val(probe), val(duration_minutes),
+          path('sorting_clean_*'),              emit: clean_sorting
+    tuple val(sid), val(probe), val(duration_minutes),
+          path('advanced_curation_*.json'),     emit: adv_labels
+
+    script:
+    """
+    python ${projectDir}/scripts/07-advanced-curate.py . --analyzer_folder ${analyzer_dir}
+    """
+}
+
+// ADV_CURATE_LPN: identical script, uses lupin container (set in nextflow.config).
+process ADV_CURATE_LPN {
+    tag "${sid}/${probe}/${analyzer_dir.name}"
+
+    publishDir "${params.results_path}/${sid}/${probe}",
+               mode: params.publish_mode, overwrite: true
+
+    input:
+    tuple val(sid), val(probe), val(duration_minutes),
+          path('preprocessed'), path(analyzer_dir)
+
+    output:
+    tuple val(sid), val(probe), val(duration_minutes),
+          path('sorting_clean_*'),              emit: clean_sorting
+    tuple val(sid), val(probe), val(duration_minutes),
+          path('advanced_curation_*.json'),     emit: adv_labels
+
+    script:
+    """
+    python ${projectDir}/scripts/07-advanced-curate.py . --analyzer_folder ${analyzer_dir}
+    """
+}
+
+// COMPARE_CLEAN runs on the clean sortings (post noise-removal + merge).
+// Uses same 06-compare.py script with different prefix/output args.
+process COMPARE_CLEAN {
+    tag "${sid}/${probe}"
+    errorStrategy 'ignore'
+
+    publishDir "${params.results_path}/${sid}/${probe}",
+               mode: params.publish_mode, overwrite: true
+
+    input:
+    tuple val(sid), val(probe), val(duration_minutes), path(clean_dirs)
+
+    output:
+    tuple val(sid), val(probe), val(duration_minutes),
+          path('consensus_clean.json'),    emit: consensus_clean
+    path 'consensus_clean_plots',          emit: plots, optional: true
+
+    script:
+    """
+    python ${projectDir}/scripts/06-compare.py \\
+        . \\
+        --input-prefix sorting_clean_ \\
+        --output-name consensus_clean.json \\
+        --plot-dir-name consensus_clean_plots \\
+        --agreement-threshold ${params.consensus_agreement_threshold} \\
+        --min-agreement       ${params.consensus_min_agreement}
+    """
+}
+
+// CONSENSUS_DELTA compares raw vs clean consensus and produces delta plots.
+process CONSENSUS_DELTA {
+    tag "${sid}/${probe}"
+
+    publishDir "${params.results_path}/${sid}/${probe}",
+               mode: params.publish_mode, overwrite: true
+
+    input:
+    tuple val(sid), val(probe), val(duration_minutes),
+          path('consensus_labels.json'), path('consensus_clean.json')
+
+    output:
+    path 'consensus_delta', emit: delta_plots
+
+    script:
+    """
+    python ${projectDir}/scripts/09-consensus-delta.py \\
+        . \\
+        --raw consensus_labels.json \\
+        --clean consensus_clean.json
+    """
+}
+
 process CURATE {
     tag "${sid}/${probe}"
 
@@ -240,7 +340,9 @@ process CURATE {
                mode: params.publish_mode, overwrite: true
 
     input:
-    tuple val(sid), val(probe), val(duration_minutes), path(analyzer_dirs), path('consensus_labels.json')
+    tuple val(sid), val(probe), val(duration_minutes),
+          path(analyzer_dirs), path('consensus_labels.json'),
+          path('consensus_clean.json'), path(adv_label_files)
 
     output:
     tuple val(sid), val(probe), val(duration_minutes), path('curation_*.json'), emit: curation
@@ -283,22 +385,27 @@ process NWB_EXPORT {
 // DAG (per probe, all parallel across probes):
 //
 //   PREPROCESS
-//     ├─→ SORT_KS4   (GPU, required) ─→ ANALYZE       ─→ ┐
-//     ├─→ SORT_SC2   (CPU, required) ─→ ANALYZE       ─→ ┤
-//     ├─→ SORT_MS5   (CPU, optional) ─→ ANALYZE       ─→ ┤─→ CURATE ─→ [NWB_EXPORT]
-//     ├─→ SORT_TDC2  (CPU, optional) ─→ ANALYZE       ─→ ┤
-//     └─→ SORT_LUPIN (CPU, optional) ─→ ANALYZE_LUPIN ─→ ┘
-//                                   └─→ COMPARE ──────────┘
+//     ├─→ SORT_KS4   (GPU) ──→ ┐
+//     ├─→ SORT_SC2   (CPU) ──→ ├──→ COMPARE (raw) ───────────────────────────────→ ┐
+//     ├─→ SORT_MS5   (CPU) ──→ ├──→ ┐                                               │
+//     ├─→ SORT_TDC2  (CPU) ──→ ┤    ├──→ ANALYZE      ──→ ADVANCED_CURATE ──→ ┐    │
+//     └─→ SORT_LUPIN (CPU) ──→ ┘    └──→ ANALYZE_LUPIN ──→ ADV_CURATE_LPN ──→ ├→ COMPARE_CLEAN ─→ ┐
+//                                                                              │    │                │
+//                                                                              │    └─→ CONSENSUS_DELTA
+//                                                                              │                     │
+//                                                                              └───→ CURATE ←────────┘
+//                                                                                      │
+//                                                                                [NWB_EXPORT]
 //
 // ANALYZE runs one SLURM job per sorter (4-5 parallel jobs per probe).
-// ANALYZE_LUPIN uses a separate container (SI 0.104.0) to read lupin output.
+// ADVANCED_CURATE removes redundant/noise units, merges splits, labels with
+// bombcell + UnitRefine. Produces clean sortings for COMPARE_CLEAN.
+// CONSENSUS_DELTA compares raw vs clean consensus (delta plots + summary).
 //
 // Optional sorters (MS5, TDC2, Lupin) use errorStrategy 'ignore' — if they
 // fail, the pipeline continues with whichever sorters succeeded.
 //
-// NWB_EXPORT is off by default (params.run_nwb_export). Enable for automatic
-// export of auto-curated units. Manual curation typically precedes final NWB.
-//
+// NWB_EXPORT is off by default (params.run_nwb_export).
 // SLURM time allocations scale with recording duration (parsed from .ap.meta).
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -316,10 +423,7 @@ workflow {
     sort_tdc2_out  = SORT_TDC2(preprocess_out.preprocessed)
     sort_lupin_out = SORT_LUPIN(preprocess_out.preprocessed)
 
-    // ── COMPARE: needs all sorters grouped ──────────────────────────────
-    // Collect all successful sorter outputs per probe for comparison.
-    // Failed sorters (errorStrategy 'ignore') simply don't emit.
-    // Uses lupin container (SI 0.104.0) which can read all sorter formats.
+    // ── COMPARE (raw): all sorter_* folders grouped ─────────────────────
     all_sorters = sort_ks4_out.sorter
         .mix(sort_sc2_out.sorter, sort_ms5_out.sorter, sort_tdc2_out.sorter, sort_lupin_out.sorter)
         .groupTuple(by: [0, 1, 2])
@@ -327,8 +431,6 @@ workflow {
     compare_out = COMPARE(all_sorters)
 
     // ── ANALYZE: one SLURM job per sorter (parallel) ────────────────────
-    // Non-lupin sorters use base container (SI 0.103.0).
-    // Lupin uses ANALYZE_LUPIN with lupin container (SI 0.104.0).
     all_sorter_individual = sort_ks4_out.sorter
         .mix(sort_sc2_out.sorter, sort_ms5_out.sorter, sort_tdc2_out.sorter)
 
@@ -340,14 +442,40 @@ workflow {
         .combine(sort_lupin_out.sorter, by: [0, 1, 2])
     analyze_lupin_out = ANALYZE_LUPIN(analyze_lupin_in)
 
-    // Merge all analyzer outputs per probe for downstream steps
+    // ── ADVANCED_CURATE: per-sorter (parallel) ──────────────────────────
+    // Produces clean sortings (noise removed + merged) + label JSONs.
+    adv_curate_in = preprocess_out.preprocessed
+        .combine(analyze_out.analyzer, by: [0, 1, 2])
+    adv_curate_out = ADVANCED_CURATE(adv_curate_in)
+
+    adv_curate_lupin_in = preprocess_out.preprocessed
+        .combine(analyze_lupin_out.analyzer, by: [0, 1, 2])
+    adv_curate_lupin_out = ADV_CURATE_LPN(adv_curate_lupin_in)
+
+    // ── COMPARE_CLEAN: all sorting_clean_* folders grouped ──────────────
+    all_clean = adv_curate_out.clean_sorting
+        .mix(adv_curate_lupin_out.clean_sorting)
+        .groupTuple(by: [0, 1, 2])
+    compare_clean_out = COMPARE_CLEAN(all_clean)
+
+    // ── CONSENSUS_DELTA: compare raw vs clean consensus ─────────────────
+    delta_in = compare_out.consensus
+        .join(compare_clean_out.consensus_clean, by: [0, 1, 2])
+    CONSENSUS_DELTA(delta_in)
+
+    // ── CURATE: merges all labels + both consensuses ────────────────────
     all_analyzers = analyze_out.analyzer
         .mix(analyze_lupin_out.analyzer)
         .groupTuple(by: [0, 1, 2])
 
-    // ── CURATE: 04-curate.py discovers all analyzer_* dirs automatically
+    all_adv_labels = adv_curate_out.adv_labels
+        .mix(adv_curate_lupin_out.adv_labels)
+        .groupTuple(by: [0, 1, 2])
+
     curate_in = all_analyzers
         .join(compare_out.consensus, by: [0, 1, 2])
+        .join(compare_clean_out.consensus_clean, by: [0, 1, 2])
+        .join(all_adv_labels, by: [0, 1, 2])
     curate_out = CURATE(curate_in)
 
     // ── NWB_EXPORT (optional): 05-export-nwb.py discovers curation_*.json

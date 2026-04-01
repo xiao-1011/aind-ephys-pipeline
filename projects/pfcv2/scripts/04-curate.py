@@ -2,6 +2,12 @@
 
 Reads quality metrics from the SortingAnalyzer extension CSVs and writes
 a curation JSON file with per-unit labels and the full metrics table.
+
+Also reads (when available):
+  - consensus_labels.json   (raw consensus from COMPARE)
+  - consensus_clean.json    (clean consensus from COMPARE_CLEAN)
+  - advanced_curation_*.json (UnitRefine, bombcell, merges from step 07)
+
 This file is the input for step 5 (NWB export) and can be inspected manually
 to verify that automatic thresholds match manual curation expectations.
 """
@@ -19,9 +25,10 @@ DEFAULT_THRESHOLDS = {
 }
 
 
-def _load_consensus(output_folder: Path, sorter_name: str) -> dict | None:
-    """Read per-unit consensus flags for this sorter from consensus_labels.json, if present."""
-    consensus_file = output_folder / "consensus_labels.json"
+def _load_consensus(output_folder: Path, sorter_name: str,
+                    filename: str = "consensus_labels.json") -> dict | None:
+    """Read per-unit consensus flags for this sorter from a consensus JSON, if present."""
+    consensus_file = output_folder / filename
     if not consensus_file.is_file():
         return None
     with open(consensus_file) as f:
@@ -30,6 +37,15 @@ def _load_consensus(output_folder: Path, sorter_name: str) -> dict | None:
     if sorter_data is None:
         return None
     return sorter_data.get("consensus", {})
+
+
+def _load_advanced_curation(output_folder: Path, sorter_name: str) -> dict | None:
+    """Read advanced curation labels from advanced_curation_{sorter}.json, if present."""
+    adv_file = output_folder / f"advanced_curation_{sorter_name}.json"
+    if not adv_file.is_file():
+        return None
+    with open(adv_file) as f:
+        return json.load(f)
 
 
 def curate_analyzer(analyzer_folder: Path, thresholds: dict) -> Path:
@@ -71,13 +87,28 @@ def curate_analyzer(analyzer_folder: Path, thresholds: dict) -> Path:
         for uid, row in qm_records.items()
     }
 
-    # Attach per-unit consensus flag if available
-    consensus = _load_consensus(analyzer_folder.parent, sorter_name)
-    if consensus is not None:
-        n_consensus = sum(bool(v) for v in consensus.values())
-        print(f"  consensus units: {n_consensus}/{len(consensus)}")
+    # Attach per-unit consensus flags (raw + clean)
+    consensus_raw = _load_consensus(analyzer_folder.parent, sorter_name, "consensus_labels.json")
+    if consensus_raw is not None:
+        n_raw = sum(bool(v) for v in consensus_raw.values())
+        print(f"  consensus (raw): {n_raw}/{len(consensus_raw)}")
     else:
-        print("  consensus_labels.json not found — skipping consensus field")
+        print("  consensus_labels.json not found — skipping raw consensus")
+
+    consensus_clean = _load_consensus(analyzer_folder.parent, sorter_name, "consensus_clean.json")
+    if consensus_clean is not None:
+        n_clean = sum(bool(v) for v in consensus_clean.values())
+        print(f"  consensus (clean): {n_clean}/{len(consensus_clean)}")
+    else:
+        print("  consensus_clean.json not found — skipping clean consensus")
+
+    # Attach advanced curation labels (UnitRefine, bombcell, merges)
+    adv_curation = _load_advanced_curation(analyzer_folder.parent, sorter_name)
+    if adv_curation is not None:
+        print(f"  advanced curation: {adv_curation.get('n_noise_removed', '?')} noise removed, "
+              f"{adv_curation.get('n_merge_groups', '?')} merge groups")
+    else:
+        print("  advanced_curation not found — skipping")
 
     output = {
         "sorter": sorter_name,
@@ -86,7 +117,11 @@ def curate_analyzer(analyzer_folder: Path, thresholds: dict) -> Path:
         "n_bad":  len(bad_ids),
         "labels": labels,
         "quality_metrics": qm_serialisable,
-        "consensus": consensus,  # None if single-sorter run
+        # Backward compat: "consensus" key points to raw
+        "consensus": consensus_raw,
+        "consensus_raw": consensus_raw,
+        "consensus_clean": consensus_clean,
+        "advanced_curation": adv_curation,
     }
 
     labels_file = analyzer_folder.parent / f"curation_{sorter_name}.json"
