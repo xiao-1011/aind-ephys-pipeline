@@ -30,9 +30,11 @@ def discoverProbes() {
             def probe_dir = meta.parent
             // Use string parsing — Nextflow path objects don't chain
             // .parent.name reliably (second .parent can resolve to Session object)
-            def parts   = probe_dir.toString().tokenize('/')
-            def session = parts[-2]
-            def probe   = parts[-1]
+            def meta_str = meta.toString()
+            def parts    = meta_str.tokenize('/')
+            def session  = parts[-3]
+            def probe    = parts[-2]
+            System.err.println("DEBUG discoverProbes: meta=${meta_str} session=${session} probe=${probe}")
             tuple(session, probe, duration_min, probe_dir)
         }
         .unique { it[0..2] }  // deduplicate by session + probe + duration
