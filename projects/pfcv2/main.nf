@@ -18,6 +18,7 @@ nextflow.enable.dsl = 2
 def discoverProbes() {
     Channel
         .fromPath("${params.data_path}/**/*.ap.meta")
+        .view { "DEBUG raw meta path: ${it} | class: ${it.getClass().getName()} | toString: ${it.toString()}" }
         .map { meta ->
             // Parse fileTimeSecs from the SpikeGLX .meta file
             def duration_sec = 0
@@ -28,15 +29,12 @@ def discoverProbes() {
             }
             def duration_min = Math.max(1, Math.ceil(duration_sec / 60.0) as int)
             def probe_dir = meta.parent
-            // Use string parsing — Nextflow path objects don't chain
-            // .parent.name reliably (second .parent can resolve to Session object)
-            def meta_str = meta.toString()
-            def parts    = meta_str.tokenize('/')
-            def session  = parts[-3]
-            def probe    = parts[-2]
-            System.err.println("DEBUG discoverProbes: meta=${meta_str} session=${session} probe=${probe}")
+            def probe_str = probe_dir.toString()
+            def session  = file(probe_str).parent.name
+            def probe    = file(probe_str).name
             tuple(session, probe, duration_min, probe_dir)
         }
+        .view { "DEBUG tuple: session=${it[0]} probe=${it[1]} dur=${it[2]}" }
         .unique { it[0..2] }  // deduplicate by session + probe + duration
 }
 
