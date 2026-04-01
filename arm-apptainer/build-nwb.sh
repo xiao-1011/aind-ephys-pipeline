@@ -24,8 +24,11 @@ CACHE_BASE="/cfs/klemming/projects/supr/dmclab/ephys-pipeline-cache"
 SIF_PATH="${CACHE_BASE}/apptainer/nwb-export.sif"
 DEF_PATH="${PIPELINE_PATH}/arm-apptainer/nwb-export.def"
 
+# Use /tmp (tmpfs, RAM-backed) for build temp — much faster than Lustre for
+# the thousands of small-file operations during pip install.
+# Docker layer cache stays on Lustre (reusable across builds, large).
 export APPTAINER_CACHEDIR="${CACHE_BASE}/apptainer-build-cache"
-export APPTAINER_TMPDIR="${CACHE_BASE}/apptainer-build-tmp"
+export APPTAINER_TMPDIR="/tmp/apptainer-build-$$"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Setup
@@ -96,8 +99,8 @@ print('PASS')
 # ─────────────────────────────────────────────────────────────────────────────
 
 echo ""
-echo "=== Cleaning build cache ==="
-rm -rf "$APPTAINER_CACHEDIR" "$APPTAINER_TMPDIR"
+echo "=== Cleaning build temp ==="
+rm -rf "$APPTAINER_TMPDIR"
 
 echo ""
 echo "=== All tests PASSED: $(date) ==="
