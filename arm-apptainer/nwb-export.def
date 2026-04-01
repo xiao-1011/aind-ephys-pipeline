@@ -1,0 +1,26 @@
+# NWB export container — fixes hdmf/pynwb incompatibility
+#
+# The base container ships hdmf 4.1.0 which removed RegionBuilder,
+# but pynwb 2.8.2 still imports it. Downgrading hdmf fixes the import.
+#
+# Build on Dardel login node:
+#   ml PDC/24.11
+#   ml apptainer/1.4.0-cpeGNU-24.11
+#   apptainer build \
+#     /cfs/klemming/projects/supr/dmclab/ephys-pipeline-cache/apptainer/nwb-export.sif \
+#     nwb-export.def
+
+Bootstrap: docker
+From: ghcr.io/allenneuraldynamics/aind-ephys-pipeline-base:si-0.103.0
+
+%labels
+    Author aind-ephys-pipeline
+    NWBExport true
+    SpikeInterfaceVersion 0.103.0
+    Fix hdmf<4 for pynwb 2.8.2 compatibility
+
+%post
+    pip install --no-cache-dir 'hdmf<4'
+
+%runscript
+    exec /bin/bash "$@"

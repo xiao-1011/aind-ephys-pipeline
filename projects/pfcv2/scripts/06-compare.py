@@ -35,6 +35,7 @@ def short_name(name: str) -> str:
         "spykingcircus2": "SC2",
         "mountainsort5": "MS5",
         "tridesclous2": "TDC2",
+        "lupin": "LPN",
     }
     return abbrevs.get(name, name)
 

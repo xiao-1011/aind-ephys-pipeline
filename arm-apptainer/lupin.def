@@ -1,0 +1,21 @@
+# Lupin sorter container — requires SpikeInterface 0.104.0
+#
+# The base container ships SI 0.103.0 which predates lupin.
+# This layer upgrades SI to 0.104.0 (the first version with lupin).
+#
+# Build on Dardel login node:
+#   bash build-lupin.sh
+
+Bootstrap: docker
+From: ghcr.io/allenneuraldynamics/aind-ephys-pipeline-base:si-0.103.0
+
+%labels
+    Author aind-ephys-pipeline
+    Lupin true
+    SpikeInterfaceVersion 0.104.0
+
+%post
+    pip install --no-cache-dir 'spikeinterface[full]==0.104.0'
+
+%runscript
+    exec /bin/bash "$@"

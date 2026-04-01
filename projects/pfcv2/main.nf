@@ -142,6 +142,27 @@ process SORT_TDC2 {
     """
 }
 
+process SORT_LUPIN {
+    tag "${session}/${probe}"
+    errorStrategy 'ignore'
+
+    publishDir "${params.results_path}/${session}/${probe}",
+               mode: params.publish_mode, overwrite: true
+
+    input:
+    tuple val(session), val(probe), val(duration_minutes), path('preprocessed')
+
+    output:
+    tuple val(session), val(probe), val(duration_minutes), path('sorter_lupin'), emit: sorter
+
+    script:
+    """
+    python ${projectDir}/scripts/02-sort.py \\
+        . \\
+        --sorters lupin
+    """
+}
+
 process COMPARE {
     tag "${session}/${probe}"
 
@@ -170,6 +191,28 @@ process COMPARE {
 // To revert to serial: restore main.nf.bak + nextflow.config.bak, or
 // remove --sorter_folder and change input to path(sorter_dirs) with groupTuple.
 process ANALYZE {
+    tag "${session}/${probe}/${sorter_dir.name}"
+
+    publishDir "${params.results_path}/${session}/${probe}",
+               mode: params.publish_mode, overwrite: true
+
+    input:
+    tuple val(session), val(probe), val(duration_minutes),
+          path('preprocessed'), path(sorter_dir)
+
+    output:
+    tuple val(session), val(probe), val(duration_minutes),
+          path('analyzer_*'), emit: analyzer
+
+    script:
+    """
+    python ${projectDir}/scripts/03-analyze.py . --sorter_folder ${sorter_dir}
+    """
+}
+
+// ANALYZE_LUPIN uses the lupin container (SI 0.104.0) since it must read
+// lupin's sorting output format. Identical script to ANALYZE.
+process ANALYZE_LUPIN {
     tag "${session}/${probe}/${sorter_dir.name}"
 
     publishDir "${params.results_path}/${session}/${probe}",
@@ -239,17 +282,21 @@ process NWB_EXPORT {
 // DAG (per probe, all parallel across probes):
 //
 //   PREPROCESS
-//     ├─→ SORT_KS4  (GPU, required) ─→ ANALYZE ─→ ┐
-//     ├─→ SORT_SC2  (CPU, required) ─→ ANALYZE ─→ ┤─→ CURATE ─→ NWB_EXPORT
-//     ├─→ SORT_MS5  (CPU, optional) ─→ ANALYZE ─→ ┤
-//     └─→ SORT_TDC2 (CPU, optional) ─→ ANALYZE ─→ ┘
-//                                  └─→ COMPARE ────┘
+//     ├─→ SORT_KS4   (GPU, required) ─→ ANALYZE       ─→ ┐
+//     ├─→ SORT_SC2   (CPU, required) ─→ ANALYZE       ─→ ┤
+//     ├─→ SORT_MS5   (CPU, optional) ─→ ANALYZE       ─→ ┤─→ CURATE ─→ [NWB_EXPORT]
+//     ├─→ SORT_TDC2  (CPU, optional) ─→ ANALYZE       ─→ ┤
+//     └─→ SORT_LUPIN (CPU, optional) ─→ ANALYZE_LUPIN ─→ ┘
+//                                   └─→ COMPARE ──────────┘
 //
-// ANALYZE runs one SLURM job per sorter (4 parallel jobs per probe) rather
-// than one serial job. Same core-hours, ~4x faster wall-clock.
+// ANALYZE runs one SLURM job per sorter (4-5 parallel jobs per probe).
+// ANALYZE_LUPIN uses a separate container (SI 0.104.0) to read lupin output.
 //
-// MountainSort5 and Tridesclous2 use errorStrategy 'ignore' — if they fail,
-// the pipeline continues with whichever sorters succeeded.
+// Optional sorters (MS5, TDC2, Lupin) use errorStrategy 'ignore' — if they
+// fail, the pipeline continues with whichever sorters succeeded.
+//
+// NWB_EXPORT is off by default (params.run_nwb_export). Enable for automatic
+// export of auto-curated units. Manual curation typically precedes final NWB.
 //
 // SLURM time allocations scale with recording duration (parsed from .ap.meta).
 // ─────────────────────────────────────────────────────────────────────────────
@@ -261,49 +308,52 @@ workflow {
 
     preprocess_out = PREPROCESS(probes_ch)
 
-    // All four sorters run in parallel on the same preprocessed recording
-    sort_ks4_out  = SORT_KS4(preprocess_out.preprocessed)
-    sort_sc2_out  = SORT_SC2(preprocess_out.preprocessed)
-    sort_ms5_out  = SORT_MS5(preprocess_out.preprocessed)
-    sort_tdc2_out = SORT_TDC2(preprocess_out.preprocessed)
+    // All five sorters run in parallel on the same preprocessed recording
+    sort_ks4_out   = SORT_KS4(preprocess_out.preprocessed)
+    sort_sc2_out   = SORT_SC2(preprocess_out.preprocessed)
+    sort_ms5_out   = SORT_MS5(preprocess_out.preprocessed)
+    sort_tdc2_out  = SORT_TDC2(preprocess_out.preprocessed)
+    sort_lupin_out = SORT_LUPIN(preprocess_out.preprocessed)
 
     // ── COMPARE: needs all sorters grouped ──────────────────────────────
     // Collect all successful sorter outputs per probe for comparison.
     // Failed sorters (errorStrategy 'ignore') simply don't emit.
+    // Uses lupin container (SI 0.104.0) which can read all sorter formats.
     all_sorters = sort_ks4_out.sorter
-        .mix(sort_sc2_out.sorter, sort_ms5_out.sorter, sort_tdc2_out.sorter)
+        .mix(sort_sc2_out.sorter, sort_ms5_out.sorter, sort_tdc2_out.sorter, sort_lupin_out.sorter)
         .groupTuple(by: [0, 1, 2])
-    // Emits: (session, probe, duration_minutes, [sorter_dir1, sorter_dir2, ...])
 
     compare_out = COMPARE(all_sorters)
 
     // ── ANALYZE: one SLURM job per sorter (parallel) ────────────────────
-    // Mix individual sorter outputs (not grouped) and combine with
-    // preprocessed recording. Each sorter gets its own ANALYZE job.
+    // Non-lupin sorters use base container (SI 0.103.0).
+    // Lupin uses ANALYZE_LUPIN with lupin container (SI 0.104.0).
     all_sorter_individual = sort_ks4_out.sorter
         .mix(sort_sc2_out.sorter, sort_ms5_out.sorter, sort_tdc2_out.sorter)
-    // Each item: (session, probe, duration_minutes, sorter_dir)
 
     analyze_in = preprocess_out.preprocessed
         .combine(all_sorter_individual, by: [0, 1, 2])
-    // Emits: (session, probe, dur, preprocessed, sorter_dir) — one per sorter
-
     analyze_out = ANALYZE(analyze_in)
-    // Runs 4 parallel SLURM jobs per probe
 
-    // Collect all analyzer outputs per probe for downstream steps
+    analyze_lupin_in = preprocess_out.preprocessed
+        .combine(sort_lupin_out.sorter, by: [0, 1, 2])
+    analyze_lupin_out = ANALYZE_LUPIN(analyze_lupin_in)
+
+    // Merge all analyzer outputs per probe for downstream steps
     all_analyzers = analyze_out.analyzer
+        .mix(analyze_lupin_out.analyzer)
         .groupTuple(by: [0, 1, 2])
-    // Emits: (session, probe, dur, [analyzer_dir1, analyzer_dir2, ...])
 
     // ── CURATE: 04-curate.py discovers all analyzer_* dirs automatically
     curate_in = all_analyzers
         .join(compare_out.consensus, by: [0, 1, 2])
     curate_out = CURATE(curate_in)
 
-    // ── NWB_EXPORT: 05-export-nwb.py discovers all curation_*.json files
-    nwb_in = preprocess_out.preprocessed
-        .join(all_sorters, by: [0, 1, 2])
-        .join(curate_out.curation, by: [0, 1, 2])
-    NWB_EXPORT(nwb_in)
+    // ── NWB_EXPORT (optional): 05-export-nwb.py discovers curation_*.json
+    if (params.run_nwb_export) {
+        nwb_in = preprocess_out.preprocessed
+            .join(all_sorters, by: [0, 1, 2])
+            .join(curate_out.curation, by: [0, 1, 2])
+        NWB_EXPORT(nwb_in)
+    }
 }

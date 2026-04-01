@@ -66,6 +66,7 @@ SORTER_KWARGS = {
     'mountainsort5':  {},
     'tridesclous2':   {},
     'spykingcircus2': {},
+    'lupin':          {},
     'ironclust':      {},
     'yass':           {},
 }

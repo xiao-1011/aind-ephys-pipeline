@@ -10,7 +10,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 #SBATCH -A naiss2026-3-127
-#SBATCH -t 12:00:00
+#SBATCH -t 1-00:00:00
 #SBATCH -n 1
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=8G
@@ -52,6 +52,7 @@ export KACHERY_DIR="${CACHE_BASE}/kachery"
 # Container SIF paths
 export CPU_SIF="${NXF_APPTAINER_CACHEDIR}/aind-ephys-pipeline-base.sif"
 export MS5_SIF="${NXF_APPTAINER_CACHEDIR}/mountainsort5-cpu.sif"
+export LUPIN_SIF="${NXF_APPTAINER_CACHEDIR}/lupin.sif"
 export GPU_SIF="${NXF_APPTAINER_CACHEDIR}/kilosort4-arm.sif"
 
 # Custom apptainer binary for GH200 (ARM) sorting nodes
@@ -95,6 +96,7 @@ echo "Data path:    ${DATA_PATH}"
 echo "Results path: ${RESULTS_PATH}"
 echo "Work dir:     ${WORKDIR}"
 echo "CPU SIF:      ${CPU_SIF}"
+echo "Lupin SIF:    ${LUPIN_SIF}"
 echo "GPU SIF:      ${GPU_SIF}"
 echo "Git commit:   $(git -C ${PIPELINE_PATH} rev-parse --short HEAD 2>/dev/null || echo unknown)"
 
