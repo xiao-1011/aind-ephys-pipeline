@@ -14,7 +14,7 @@ def main():
                         help='Path to output folder')
     args = parser.parse_args()
 
-    global_job_kwargs = dict(n_jobs=20, mp_context='fork', progress_bar=True)
+    global_job_kwargs = dict(n_jobs=128, mp_context='fork', progress_bar=True)
     si.set_global_job_kwargs(**global_job_kwargs)
 
     spikeglx_folder = Path(args.data_folder)

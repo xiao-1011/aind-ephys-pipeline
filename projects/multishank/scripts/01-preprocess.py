@@ -1,9 +1,13 @@
 from pathlib import Path
 import argparse
+import resource
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 import spikeinterface.full as si
 import spikeinterface.preprocessing as spre
 from spikeinterface.sortingcomponents.motion import interpolate_motion
+
+MAX_PARALLEL_SHANKS = 2
 
 
 def preprocess_shank(recording, shank_label, working_folder, filter_type,
@@ -94,7 +98,9 @@ def preprocess_shank(recording, shank_label, working_folder, filter_type,
     print(f"  [{shank_label}] Saving preprocessed recording...")
     recording_preprocessed = rec.astype('int16')
     recording_preprocessed.save(folder=preprocessed_folder, format='binary')
-    print(f"  [{shank_label}] Done. Saved to: {preprocessed_folder}")
+
+    peak_gb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / (1024 ** 2)
+    print(f"  [{shank_label}] Done. Peak RSS: {peak_gb:.1f} GB. Saved to: {preprocessed_folder}")
 
 
 def main():
@@ -119,7 +125,8 @@ def main():
                         help='Compute motion but do not apply interpolation')
     args = parser.parse_args()
 
-    global_job_kwargs = dict(n_jobs=20, mp_context='fork', progress_bar=True)
+    n_jobs = 128 // MAX_PARALLEL_SHANKS  # split cores evenly across parallel shanks
+    global_job_kwargs = dict(n_jobs=n_jobs, mp_context='fork', progress_bar=True)
     si.set_global_job_kwargs(**global_job_kwargs)
 
     spikeglx_folder = Path(args.data_folder)
@@ -161,13 +168,25 @@ def main():
         preprocess_shank(raw_rec, 'shank0', working_folder,
                          args.filter_type, args.spatial_filter, args.apply_motion)
     else:
-        # Multi-shank — split by group and process each
+        # Multi-shank — split by group and process in parallel (2 at a time)
         rec_dict = raw_rec.split_by('group')
-        for group_id in unique_groups:
-            shank_label = f"shank{group_id}"
-            print(f"\nProcessing {shank_label}...")
-            preprocess_shank(rec_dict[group_id], shank_label, working_folder,
-                             args.filter_type, args.spatial_filter, args.apply_motion)
+        with ProcessPoolExecutor(max_workers=MAX_PARALLEL_SHANKS) as executor:
+            futures = {}
+            for group_id in unique_groups:
+                shank_label = f"shank{group_id}"
+                print(f"\nSubmitting {shank_label}...")
+                fut = executor.submit(
+                    preprocess_shank, rec_dict[group_id], shank_label,
+                    working_folder, args.filter_type, args.spatial_filter,
+                    args.apply_motion)
+                futures[fut] = shank_label
+            for fut in as_completed(futures):
+                label = futures[fut]
+                try:
+                    fut.result()
+                except Exception as e:
+                    print(f"\nERROR processing {label}: {e}")
+                    raise
 
     print("\nPreprocessing complete.")
 
