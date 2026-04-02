@@ -229,15 +229,20 @@ def plot_survival_curves(names, match_map, plot_dir):
 def plot_upset(names, match_map, plot_dir):
     """Plot D: UpSet-style intersection chart.
 
-    For each unit in each sorter, compute its 'match signature' (the set of
-    sorters it was found in: itself + all sorters that matched it).  Then count
-    how many units share each signature.
+    Each bar counts *distinct biological neurons* — i.e. matched groups of
+    units across sorters.  A unit's signature is the set of sorters that found
+    it.  To avoid double-counting (once per sorter), we pick the canonical
+    representative: only the unit from the lexicographically first sorter in
+    the signature contributes to the count.
     """
     sig_counter = Counter()
     for name in names:
         for uid_str, matched in match_map[name].items():
             sig = frozenset({name} | matched)
-            sig_counter[sig] += 1
+            # Only count from the first sorter in the signature to avoid
+            # counting the same neuron once per sorter that found it.
+            if name == min(sig):
+                sig_counter[sig] += 1
 
     if not sig_counter:
         return
