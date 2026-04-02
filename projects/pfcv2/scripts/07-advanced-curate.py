@@ -148,9 +148,7 @@ def main():
     print(f"  Noise: {len(noise_units)} / {n_after_dedup}")
     print(f"  Neural: {len(neural_units)} / {n_after_dedup}")
 
-    analyzer_neural = analyzer.select_units(
-        list(neural_units.index), keep_all_extensions=True
-    )
+    analyzer_neural = analyzer.select_units(list(neural_units.index))
 
     # 1c. Auto-merge split units (on neural units only)
     print("\n--- Auto-merge (similarity_correlograms) ---")
