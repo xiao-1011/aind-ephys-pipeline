@@ -4,7 +4,7 @@ Runs redundant unit removal, UnitRefine noise/neural classification,
 auto-merge of split units, bombcell labeling, and UnitRefine SUA/MUA
 classification.  Produces a *clean sorting* (noise removed + merges applied)
 for a second consensus comparison (COMPARE_CLEAN), plus label JSONs consumed
-by 04-curate.py and the offline GUI script (08-offline-curate.py).
+by 04-curate.py and the offline GUI script (09-offline-curate.py).
 
 Adapted from pfc-scripts/Advanced_curation3.py — everything except the GUI.
 

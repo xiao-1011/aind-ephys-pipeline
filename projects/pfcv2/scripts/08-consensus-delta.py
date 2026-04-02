@@ -1,11 +1,11 @@
-"""Step 9: Compare raw vs clean consensus to measure the effect of advanced curation.
+"""Step 8: Compare raw vs clean consensus to measure the effect of advanced curation.
 
 Reads two consensus JSONs (produced by 06-compare.py) and generates comparison
 plots + a summary text file.  Runs as a lightweight Nextflow process after
 COMPARE and COMPARE_CLEAN.
 
 Usage:
-    python 09-consensus-delta.py <output_folder> \
+    python 08-consensus-delta.py <output_folder> \
         --raw consensus_labels.json \
         --clean consensus_clean.json
 """

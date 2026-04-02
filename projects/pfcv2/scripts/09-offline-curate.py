@@ -1,4 +1,4 @@
-"""Step 8: Offline manual curation with SpikeInterface GUI.
+"""Step 9: Offline manual curation with SpikeInterface GUI.
 
 NOT part of the Nextflow pipeline — runs locally on macOS/Linux desktop after
 downloading results from Dardel.
@@ -8,7 +8,7 @@ Loads the SortingAnalyzer and restores all labels computed by
 then launches the SpikeInterface GUI for manual curation.
 
 Usage:
-    python 08-offline-curate.py /path/to/analyzer_kilosort4
+    python 09-offline-curate.py /path/to/analyzer_kilosort4
 
 The analyzer folder should contain (produced by 07-advanced-curate.py on Dardel):
   - curation.json           (CurationModel v2 — merges, removed, labels)

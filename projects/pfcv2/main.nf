@@ -326,7 +326,7 @@ process CONSENSUS_DELTA {
 
     script:
     """
-    python ${projectDir}/scripts/09-consensus-delta.py \\
+    python ${projectDir}/scripts/08-consensus-delta.py \\
         . \\
         --raw consensus_labels.json \\
         --clean consensus_clean.json
