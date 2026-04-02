@@ -128,6 +128,10 @@ echo "Git commit:   $(git -C ${PIPELINE_PATH} rev-parse --short HEAD 2>/dev/null
 # Run Nextflow
 # ─────────────────────────────────────────────────────────────────────────────
 
+# Nextflow stores its task cache in .nextflow/ relative to CWD.
+# Always cd here so -resume finds the cache regardless of where sbatch was called.
+cd "${OUTPUT_BASE}"
+
 $NF_BIN \
     -C "${PIPELINE_PATH}/projects/pfcv2/nextflow.config" \
     -log "${LOGDIR}/${SLURM_JOB_ID}.nextflow.log" \
