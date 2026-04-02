@@ -28,7 +28,7 @@ date
 # ---------------------------------------------------------------------------
 
 # Parent directory of your session folder(s).
-export DATA_PATH="/cfs/klemming/projects/supr/dmclab/Anil/funCon"
+export DATA_PATH="/cfs/klemming/projects/supr/dmclab/Anil/funCon/2026-04-02_1005256_funCon_g2"
 
 # ---------------------------------------------------------------------------
 # Shared infrastructure — rarely needs editing
