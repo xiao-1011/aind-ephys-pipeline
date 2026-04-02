@@ -172,7 +172,7 @@ def main():
           f"-{n_units_merged - n_merges} merged)")
 
     clean_folder = output_folder / f"sorting_clean_{sorter_name}"
-    clean_sorting.save(folder=clean_folder, format="binary_folder", overwrite=True)
+    clean_sorting.save(folder=clean_folder, overwrite=True)
     print(f"  Saved to: {clean_folder.name}")
 
     # ── Phase 2: Label everything (for GUI / downstream CURATE) ─────────
