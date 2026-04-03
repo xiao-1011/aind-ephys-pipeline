@@ -7,7 +7,7 @@ import spikeinterface.full as si
 import spikeinterface.preprocessing as spre
 from spikeinterface.sortingcomponents.motion import interpolate_motion
 
-MAX_PARALLEL_SHANKS = 2
+MAX_PARALLEL_SHANKS = 4
 
 
 def preprocess_shank(recording, shank_label, working_folder, filter_type,
