@@ -50,8 +50,9 @@ def main():
     raw_rec = si.read_spikeglx(spikeglx_folder, stream_name=stream_name, load_sync_channel=False)
 
     if args.max_duration_sec > 0:
+        t_start = raw_rec.get_times()[0]
         end_sec = min(args.max_duration_sec, raw_rec.get_total_duration())
-        raw_rec = raw_rec.time_slice(start_time=0, end_time=end_sec)
+        raw_rec = raw_rec.time_slice(start_time=t_start, end_time=t_start + end_sec)
         print(f"  TEST MODE: truncated to {end_sec:.0f}s ({raw_rec.get_num_frames()} frames)")
 
     print("Preprocessing...")
