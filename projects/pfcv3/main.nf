@@ -73,7 +73,7 @@ process SORT_KS4_BATCH {
     // Avoids complex per-probe publish logic in a batched process.
 
     input:
-    tuple val(sids), val(probes), val(durs), path(preproc_dirs)
+    tuple val(sids), val(probes), val(durs), path(preproc_dirs, stageAs: 'preproc_?')
 
     output:
     tuple val(sids), val(probes), val(durs),
@@ -83,11 +83,10 @@ process SORT_KS4_BATCH {
     def n = sids.size()
     """
     # Set up per-probe work directories with preprocessed symlinks
-    DIRS=(${preproc_dirs.collect { it.name }.join(' ')})
-
+    # stageAs 'preproc_?' produces preproc_1, preproc_2, ... (1-based)
     for i in \$(seq 0 \$((${n} - 1))); do
         mkdir -p probe_\${i}
-        ln -s \$(readlink -f \${DIRS[\$i]}) probe_\${i}/preprocessed
+        ln -s \$(readlink -f preproc_\$((i + 1))) probe_\${i}/preprocessed
     done
 
     # Run all sorts in parallel — one GPU per probe
