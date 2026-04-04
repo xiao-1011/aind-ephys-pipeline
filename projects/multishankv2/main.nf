@@ -26,6 +26,9 @@ def discoverProbes() {
                     duration_sec = line.split('=')[1].trim().toFloat()
                 }
             }
+            if (params.test_duration_sec > 0) {
+                duration_sec = Math.min(duration_sec, params.test_duration_sec as float)
+            }
             def duration_min = Math.max(1, Math.ceil(duration_sec / 60.0) as int)
             def probe_dir = meta.parent
             def probe_str = probe_dir.toString()
