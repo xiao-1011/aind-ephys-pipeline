@@ -212,25 +212,68 @@ process COMPARE {
     """
 }
 
-// ANALYZE runs per-sorter (one SLURM job each) instead of one serial job for
-// all sorters. Same core-hours, ~4x faster wall-clock, smaller memory footprint.
-// The script already supports --sorter_folder for single-sorter mode.
-// To revert to serial: restore main.nf.bak + nextflow.config.bak, or
-// remove --sorter_folder and change input to path(sorter_dirs) with groupTuple.
-process ANALYZE {
-    tag "${sid}/${probe}/${sorter_dir.name}"
+// ANALYZE split per-sorter: KS4/SC2 need large nodes (up to 396 GB RSS),
+// while TDC2/MS5 fit on shared (155 GB / 51 GB). Same script, different
+// resource allocations via nextflow.config process selectors.
 
+process ANALYZE_KS4 {
+    tag "${sid}/${probe}/${sorter_dir.name}"
     publishDir "${params.results_path}/${sid}/${probe}",
                mode: params.publish_mode, overwrite: true
-
     input:
     tuple val(sid), val(probe), val(duration_minutes),
           path('preprocessed'), path(sorter_dir)
-
     output:
     tuple val(sid), val(probe), val(duration_minutes),
           path('analyzer_*'), emit: analyzer
+    script:
+    """
+    python ${projectDir}/scripts/03-analyze.py . --sorter_folder ${sorter_dir}
+    """
+}
 
+process ANALYZE_SC2 {
+    tag "${sid}/${probe}/${sorter_dir.name}"
+    publishDir "${params.results_path}/${sid}/${probe}",
+               mode: params.publish_mode, overwrite: true
+    input:
+    tuple val(sid), val(probe), val(duration_minutes),
+          path('preprocessed'), path(sorter_dir)
+    output:
+    tuple val(sid), val(probe), val(duration_minutes),
+          path('analyzer_*'), emit: analyzer
+    script:
+    """
+    python ${projectDir}/scripts/03-analyze.py . --sorter_folder ${sorter_dir}
+    """
+}
+
+process ANALYZE_TDC2 {
+    tag "${sid}/${probe}/${sorter_dir.name}"
+    publishDir "${params.results_path}/${sid}/${probe}",
+               mode: params.publish_mode, overwrite: true
+    input:
+    tuple val(sid), val(probe), val(duration_minutes),
+          path('preprocessed'), path(sorter_dir)
+    output:
+    tuple val(sid), val(probe), val(duration_minutes),
+          path('analyzer_*'), emit: analyzer
+    script:
+    """
+    python ${projectDir}/scripts/03-analyze.py . --sorter_folder ${sorter_dir}
+    """
+}
+
+process ANALYZE_MS5 {
+    tag "${sid}/${probe}/${sorter_dir.name}"
+    publishDir "${params.results_path}/${sid}/${probe}",
+               mode: params.publish_mode, overwrite: true
+    input:
+    tuple val(sid), val(probe), val(duration_minutes),
+          path('preprocessed'), path(sorter_dir)
+    output:
+    tuple val(sid), val(probe), val(duration_minutes),
+          path('analyzer_*'), emit: analyzer
     script:
     """
     python ${projectDir}/scripts/03-analyze.py . --sorter_folder ${sorter_dir}
@@ -416,14 +459,17 @@ process NWB_EXPORT {
 //     │                                                                      │
 //     ├─→ SORT_SC2   (CPU, immediate) ──→ ┐                                  │
 //     ├─→ SORT_MS5   (CPU, immediate) ──→ ├── + ks4 ──→ COMPARE (raw) ──────────→ ┐
-//     ├─→ SORT_TDC2  (CPU, immediate) ──→ ┤             ┐                          │
-//     └─→ SORT_LUPIN (CPU, immediate) ──→ ┘   ├──→ ANALYZE      ──→ ADV_CURATE ──→ ┐
-//                                             └──→ ANALYZE_LUPIN ──→ ADV_LPN ──→ ├→ COMPARE_CLEAN ─→ ┐
-//                                                                               │    │                │
-//                                                                               │    └─→ CONSENSUS_DELTA
-//                                                                               │                     │
-//                                                                               └───→ CURATE ←────────┘
-//                                                                                       │
+//     ├─→ SORT_TDC2  (CPU, immediate) ──→ ┤                                       │
+//     └─→ SORT_LUPIN (CPU, immediate) ──→ ┘                                        │
+//                                                                                  │
+//     ks4 ──→ ANALYZE_KS4 (main)  ─┐                                              │
+//     sc2 ──→ ANALYZE_SC2 (main)  ─┤──→ ADV_CURATE ──→ ┐                          │
+//     tdc2──→ ANALYZE_TDC2 (shared)─┤                    ├→ COMPARE_CLEAN ─→ ┐     │
+//     ms5 ──→ ANALYZE_MS5 (shared)─┘                    │    │                │     │
+//     lupin─→ ANALYZE_LUPIN (shared)──→ ADV_LPN ───────→┘    └─→ CONSENSUS_DELTA  │
+//                                                                            │     │
+//                                                            CURATE ←────────┘←────┘
+//                                                              │
 //                                                                                 [NWB_EXPORT]
 //
 // KS4 uses buffer(size:4, remainder:true) to batch 4 probes per GPU node.
@@ -481,22 +527,38 @@ workflow {
 
     compare_out = COMPARE(all_sorters)
 
-    // ── ANALYZE: one SLURM job per sorter (parallel) ────────────────────
-    all_sorter_individual_for_analyze = sort_ks4_individual
-        .mix(sort_sc2_out.sorter, sort_ms5_out.sorter, sort_tdc2_out.sorter)
+    // ── ANALYZE: per-sorter processes with different resource allocations ─
+    // KS4/SC2 → main (large nodes, up to 396 GB RSS)
+    // TDC2/MS5 → shared (155 GB / 51 GB RSS)
+    // Lupin → shared (separate container)
+    analyze_ks4_in = preprocess_out.preprocessed
+        .combine(sort_ks4_individual, by: [0, 1, 2])
+    analyze_ks4_out = ANALYZE_KS4(analyze_ks4_in)
 
-    analyze_in = preprocess_out.preprocessed
-        .combine(all_sorter_individual_for_analyze, by: [0, 1, 2])
-    analyze_out = ANALYZE(analyze_in)
+    analyze_sc2_in = preprocess_out.preprocessed
+        .combine(sort_sc2_out.sorter, by: [0, 1, 2])
+    analyze_sc2_out = ANALYZE_SC2(analyze_sc2_in)
+
+    analyze_tdc2_in = preprocess_out.preprocessed
+        .combine(sort_tdc2_out.sorter, by: [0, 1, 2])
+    analyze_tdc2_out = ANALYZE_TDC2(analyze_tdc2_in)
+
+    analyze_ms5_in = preprocess_out.preprocessed
+        .combine(sort_ms5_out.sorter, by: [0, 1, 2])
+    analyze_ms5_out = ANALYZE_MS5(analyze_ms5_in)
 
     analyze_lupin_in = preprocess_out.preprocessed
         .combine(sort_lupin_out.sorter, by: [0, 1, 2])
     analyze_lupin_out = ANALYZE_LUPIN(analyze_lupin_in)
 
+    // Mix all non-Lupin analyzer outputs for ADVANCED_CURATE
+    all_analyze_non_lupin = analyze_ks4_out.analyzer
+        .mix(analyze_sc2_out.analyzer, analyze_tdc2_out.analyzer, analyze_ms5_out.analyzer)
+
     // ── ADVANCED_CURATE: per-sorter (parallel) ──────────────────────────
     // Produces clean sortings (noise removed + merged) + label JSONs.
     adv_curate_in = preprocess_out.preprocessed
-        .combine(analyze_out.analyzer, by: [0, 1, 2])
+        .combine(all_analyze_non_lupin, by: [0, 1, 2])
     adv_curate_out = ADVANCED_CURATE(adv_curate_in)
 
     adv_curate_lupin_in = preprocess_out.preprocessed
@@ -515,8 +577,9 @@ workflow {
     CONSENSUS_DELTA(delta_in)
 
     // ── CURATE: merges all labels + both consensuses ────────────────────
-    all_analyzers = analyze_out.analyzer
-        .mix(analyze_lupin_out.analyzer)
+    all_analyzers = analyze_ks4_out.analyzer
+        .mix(analyze_sc2_out.analyzer, analyze_tdc2_out.analyzer,
+             analyze_ms5_out.analyzer, analyze_lupin_out.analyzer)
         .groupTuple(by: [0, 1, 2])
 
     all_adv_labels = adv_curate_out.adv_labels

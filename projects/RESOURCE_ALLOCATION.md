@@ -91,37 +91,48 @@ Note: `peak_rss` can include memory-mapped file pages (SpikeInterface memory-map
 
 *Lupin RSS measured from the one shank that completed quickly (shank2). The slow shanks timed out before we could measure.
 
-## Why each process is assigned to its partition
+## pfcv3 proposed resource allocation (PFC full-probe, 384 ch)
 
-### Processes on `main` (whole-node exclusive)
+Proportional billing on shared: 1 logical core ≈ 0.887 GB. Charged for `max(cores, memory/0.887)`.
 
-These processes genuinely need >227 GB memory or benefit from having all 128 cores:
+| Process | Peak RSS | +30% headroom | Actual cores | CPUs | Memory | Dominant | Equiv. charge | Partition |
+|---------|----------|--------------|-------------|------|--------|----------|--------------|-----------|
+| PREPROCESS | 47-61 GB | 79 GB | 128 (n_jobs) | 128 | 96 GB | cores (128) | 128 | shared |
+| SORT_KS4_BATCH | 25-34 GB | 44 GB | GPU | 288 | 480 GB | — | GPU alloc | gpugh |
+| SORT_SC2 | 141-162 GB | 211 GB | ~13 | 128 | 230 GB | mem (259) | 259 | main |
+| SORT_MS5 | 42-54 GB | 70 GB | ~45 | 64 | 72 GB | mem (81) | 81 | shared |
+| SORT_TDC2 | 64-84 GB | 109 GB | ~11 | 128 | 110 GB | mem (124) | 128 | shared |
+| SORT_LUPIN | 97-110 GB | 143 GB | ~14 | 128 | 144 GB | mem (162) | 162 | shared |
+| ANALYZE | 127-396 GB | 515 GB | ~12 | 128 | 230 GB | mem (259) | 259 | main |
+| ANALYZE_LUPIN | 69-81 GB | 105 GB | ~23 | 32 | 96 GB | mem (108) | 108 | shared |
+| ADVANCED_CURATE | 1-11 GB | 14 GB | ~1 | 4 | 16 GB | mem (18) | 18 | shared |
+| ADV_CURATE_LPN | 12 GB | 16 GB | ~1 | 4 | 16 GB | mem (18) | 18 | shared |
+| COMPARE | 2-3 GB | 4 GB | ~1 | 4 | 16 GB | mem (18) | 18 | shared |
+| COMPARE_CLEAN | 0.4-1.3 GB | 2 GB | ~1 | 4 | 16 GB | mem (18) | 18 | shared |
+| CONSENSUS_DELTA | 85 MB | — | ~1 | 2 | 4 GB | mem (5) | 5 | shared |
+| CURATE | 50-88 MB | — | ~1 | 4 | 16 GB | mem (18) | 18 | shared |
+| NWB_EXPORT | — | — | — | 4 | 16 GB | mem (18) | 18 | shared |
 
-- **PREPROCESS** (128 cores, 230 GB): Measured 149 GB peak RSS with 4 shanks running in parallel. The parallel shank processing (4 x 32 cores) uses most of the node. 149 GB > 227 GB shared limit.
+Notes:
+- SORT_SC2 on main (128 cores flat) is cheaper than shared (~259 equiv cores).
+- ANALYZE is forced to main because KS4 analysis hits 396 GB. All sorter analyses
+  share the same process definition, so all go to main. Splitting ANALYZE per sorter
+  would allow TDC2 (155 GB) and MS5 (51 GB) analyses to go to shared (see below).
 
-- **SORT_SC2** (128 cores, 230 GB): SpykingCircus2 hit 116 GB RSS on one shank (shank1, which had more detected spikes). This exceeds the 227 GB shared limit. Other shanks were 65-93 GB and would fit on shared, but we can't predict per-shank memory in advance.
+### Per-sorter ANALYZE breakdown (PFC, 999770, 107 min)
 
-- **ANALYZE** (128 cores, 230 GB): The analysis step re-loads the full preprocessed recording plus all sorting results to compute waveforms, templates, quality metrics, etc. KiloSort4 analysis peaked at **319 GB** RSS (the KS4 sorting output is large). Other sorters' analyses were lower (17-211 GB) but KS4 analysis alone forces this onto `main`. Since all sorters use the same ANALYZE process definition, they all go to `main`.
+ANALYZE memory and runtime vary enormously by sorter:
 
-### Processes on `shared` (per-core billing)
+| ANALYZE per sorter | Peak RSS | Cores | Runtime | +30% headroom | Could go to shared? |
+|---|---|---|---|---|---|
+| **KS4** | 337–396 GB | ~12 | 42–83 min | 515 GB | No (needs large or main) |
+| **SC2** | 276–309 GB | ~14 | 36–59 min | 402 GB | No |
+| **TDC2** | 127–155 GB | ~12 | 21–39 min | 202 GB | Yes (< 227 GB) |
+| **MS5** | 20–51 GB | ~11 | 12–19 min | 66 GB | Yes easily |
+| **Lupin** | 69–81 GB | ~23 | 57–78 min | 105 GB | Yes (already separate) |
 
-These processes fit comfortably under 227 GB and don't need 128 cores:
-
-- **SORT_TDC2** (16 cores, 32 GB): Only uses ~11 cores and 18-21 GB. Very fast (4-5 min). The most wasteful process on main — a full node for 5 minutes of 11-core work.
-
-- **SORT_MS5** (64 cores, 64 GB): Uses ~45 cores and 9-30 GB. Requesting 64 cores matches actual usage. Well under 227 GB.
-
-- **SORT_LUPIN** (32 cores, 96 GB): Uses ~14 cores and ~52 GB. The template-matching phase is slow but not CPU-bound. With 5x time multiplier on shared, the generous limit costs nothing extra (pay for 32 cores x actual runtime, not 32 cores x time limit).
-
-- **ANALYZE_LUPIN** (32 cores, 64 GB): Uses ~39 cores and 26 GB. Lupin analysis is lighter than other sorters because the Lupin analyzer stores data differently.
-
-- **ADVANCED_CURATE** (4 cores, 8 GB): Loads a SortingAnalyzer (~1-5 GB for per-shank data), runs UnitRefine ML classifier, computes auto-merge. Single-threaded ML inference. Was the single most wasteful allocation: a full 128-core node for 30 seconds of single-threaded work.
-
-- **ADV_CURATE_LPN** (4 cores, 8 GB): Same as ADVANCED_CURATE but for Lupin output. Same resource profile.
-
-### Processes on `gpugh` (GPU)
-
-- **SORT_KS4** (16 cores, 64 GB, 1 GPU): Needs a GPU. The `gpugh` partition is exclusive — every job gets a full GPU node (4 GPUs) even though KS4 only uses 1 GPU. This is a known inefficiency (see `pfcv2/TODO.md` for multi-GPU optimization plans).
+Splitting ANALYZE into per-sorter processes (ANALYZE_KS4, ANALYZE_SC2, ANALYZE_TDC2,
+ANALYZE_MS5) would allow TDC2 and MS5 analyses to run on shared instead of main.
 
 ## Measured peak RSS (pfcv2, full probe, 384 channels NP1, 107 min)
 
