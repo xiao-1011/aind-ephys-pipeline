@@ -230,7 +230,67 @@ process COMPARE {
     """
 }
 
-process ANALYZE {
+process ANALYZE_KS4 {
+    tag "${sid}/${probe}/${shank}/${sorter_dir.name}"
+
+    publishDir "${params.results_path}/${sid}/${probe}/${shank}",
+               mode: params.publish_mode, overwrite: true
+
+    input:
+    tuple val(sid), val(probe), val(shank), val(duration_minutes),
+          path(preproc_dir, stageAs: 'preprocessed'), path(sorter_dir)
+
+    output:
+    tuple val(sid), val(probe), val(shank), val(duration_minutes),
+          path('analyzer_*'), emit: analyzer
+
+    script:
+    """
+    python ${projectDir}/scripts/03-analyze.py . --sorter_folder ${sorter_dir}
+    """
+}
+
+process ANALYZE_SC2 {
+    tag "${sid}/${probe}/${shank}/${sorter_dir.name}"
+
+    publishDir "${params.results_path}/${sid}/${probe}/${shank}",
+               mode: params.publish_mode, overwrite: true
+
+    input:
+    tuple val(sid), val(probe), val(shank), val(duration_minutes),
+          path(preproc_dir, stageAs: 'preprocessed'), path(sorter_dir)
+
+    output:
+    tuple val(sid), val(probe), val(shank), val(duration_minutes),
+          path('analyzer_*'), emit: analyzer
+
+    script:
+    """
+    python ${projectDir}/scripts/03-analyze.py . --sorter_folder ${sorter_dir}
+    """
+}
+
+process ANALYZE_TDC2 {
+    tag "${sid}/${probe}/${shank}/${sorter_dir.name}"
+
+    publishDir "${params.results_path}/${sid}/${probe}/${shank}",
+               mode: params.publish_mode, overwrite: true
+
+    input:
+    tuple val(sid), val(probe), val(shank), val(duration_minutes),
+          path(preproc_dir, stageAs: 'preprocessed'), path(sorter_dir)
+
+    output:
+    tuple val(sid), val(probe), val(shank), val(duration_minutes),
+          path('analyzer_*'), emit: analyzer
+
+    script:
+    """
+    python ${projectDir}/scripts/03-analyze.py . --sorter_folder ${sorter_dir}
+    """
+}
+
+process ANALYZE_MS5 {
     tag "${sid}/${probe}/${shank}/${sorter_dir.name}"
 
     publishDir "${params.results_path}/${sid}/${probe}/${shank}",
@@ -432,16 +492,19 @@ process NWB_EXPORT {
 //     |  +-- flatMap (fan back per shank) -+   |
 //     |       |                                |
 //     +--> sort_ks4 ──────────────────────> +  |
-//     +--> SORT_SC2   (CPU, per-shank) --> +--> COMPARE (raw) ──────────────> +
-//     +--> SORT_MS5   (CPU, per-shank) --> +-->  +                            |
-//     +--> SORT_TDC2  (CPU, per-shank) --> +    +--> ANALYZE      --> ADV_CURATE --> +
-//     +--> SORT_LUPIN (CPU, per-shank) --> +    +--> ANALYZE_LUPIN --> ADV_LPN  --> +--> COMPARE_CLEAN --> +
-//                                                                                  |    |                  |
-//                                                                                  |    +--> CONSENSUS_DELTA
-//                                                                                  |                       |
-//                                                                                  +---> CURATE <----------+
-//                                                                                          |
-//                                                                                    [NWB_EXPORT]
+//     +--> SORT_SC2   (CPU, per-shank) --> +--> COMPARE (raw) ──────────────────> +
+//     +--> SORT_MS5   (CPU, per-shank) --> +-->  +                                |
+//     +--> SORT_TDC2  (CPU, per-shank) --> +    +--> ANALYZE_KS4  --> ADV_CURATE --> +
+//     +--> SORT_LUPIN (CPU, per-shank) --> +    +--> ANALYZE_SC2  --> ADV_CURATE --> +
+//                                               +--> ANALYZE_TDC2 --> ADV_CURATE --> +
+//                                               +--> ANALYZE_MS5  --> ADV_CURATE --> +
+//                                               +--> ANALYZE_LUPIN --> ADV_LPN   --> +--> COMPARE_CLEAN --> +
+//                                                                                   |    |                  |
+//                                                                                   |    +--> CONSENSUS_DELTA
+//                                                                                   |                       |
+//                                                                                   +---> CURATE <----------+
+//                                                                                           |
+//                                                                                     [NWB_EXPORT]
 //
 // PREPROCESS outputs preprocessed_shank0/ (and shank1..N for multi-shank).
 // flatMap fans out per-shank tuples; CPU sorters run independently per shank.
@@ -503,21 +566,33 @@ workflow {
 
     compare_out = COMPARE(all_sorters)
 
-    // ── ANALYZE: one SLURM job per sorter (parallel) ──────────────────
-    all_sorter_individual = sort_ks4_shank
-        .mix(sort_sc2_out.sorter, sort_ms5_out.sorter, sort_tdc2_out.sorter)
+    // ── ANALYZE: per-sorter processes for right-sized resource allocation ──
+    analyze_ks4_in = shank_ch
+        .combine(sort_ks4_shank, by: [0, 1, 2, 3])
+    analyze_ks4_out = ANALYZE_KS4(analyze_ks4_in)
 
-    analyze_in = shank_ch
-        .combine(all_sorter_individual, by: [0, 1, 2, 3])
-    analyze_out = ANALYZE(analyze_in)
+    analyze_sc2_in = shank_ch
+        .combine(sort_sc2_out.sorter, by: [0, 1, 2, 3])
+    analyze_sc2_out = ANALYZE_SC2(analyze_sc2_in)
+
+    analyze_tdc2_in = shank_ch
+        .combine(sort_tdc2_out.sorter, by: [0, 1, 2, 3])
+    analyze_tdc2_out = ANALYZE_TDC2(analyze_tdc2_in)
+
+    analyze_ms5_in = shank_ch
+        .combine(sort_ms5_out.sorter, by: [0, 1, 2, 3])
+    analyze_ms5_out = ANALYZE_MS5(analyze_ms5_in)
 
     analyze_lupin_in = shank_ch
         .combine(sort_lupin_out.sorter, by: [0, 1, 2, 3])
     analyze_lupin_out = ANALYZE_LUPIN(analyze_lupin_in)
 
     // ── ADVANCED_CURATE: per-sorter (parallel) ────────────────────────
+    all_analyze_non_lupin = analyze_ks4_out.analyzer
+        .mix(analyze_sc2_out.analyzer, analyze_tdc2_out.analyzer, analyze_ms5_out.analyzer)
+
     adv_curate_in = shank_ch
-        .combine(analyze_out.analyzer, by: [0, 1, 2, 3])
+        .combine(all_analyze_non_lupin, by: [0, 1, 2, 3])
     adv_curate_out = ADVANCED_CURATE(adv_curate_in)
 
     adv_curate_lupin_in = shank_ch
@@ -536,8 +611,9 @@ workflow {
     CONSENSUS_DELTA(delta_in)
 
     // ── CURATE: merges all labels + both consensuses ──────────────────
-    all_analyzers = analyze_out.analyzer
-        .mix(analyze_lupin_out.analyzer)
+    all_analyzers = analyze_ks4_out.analyzer
+        .mix(analyze_sc2_out.analyzer, analyze_tdc2_out.analyzer,
+             analyze_ms5_out.analyzer, analyze_lupin_out.analyzer)
         .groupTuple(by: [0, 1, 2, 3])
 
     all_adv_labels = adv_curate_out.adv_labels

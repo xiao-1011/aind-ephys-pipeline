@@ -37,13 +37,13 @@ cores (68 physical core-hours per node-hour), even if you only request 32 cpus.
 
 ### Key correction
 
-The nf-core PDC config uses a 227 GB threshold for shared:
+The nf-core PDC config uses a 111 GB threshold for shared:
 ```groovy
 if (task.time <= 7.d && task.memory <= 111.GB && task.cpus <= 256) {
     slurm_opts << "-p shared"
 }
 ```
-This is **conservative** — thin nodes have ~227 GB available, not 227 GB.
+This is **conservative** — thin nodes have ~227 GB available, not 111 GB.
 We use the full ~227 GB range for shared.
 
 ## The problem: wasting allocation on whole-node exclusive jobs
@@ -91,8 +91,9 @@ Note: `peak_rss` can include memory-mapped file pages (SpikeInterface memory-map
 
 *Lupin RSS measured from the one shank that completed quickly (shank2). The slow shanks timed out before we could measure.
 
-## pfcv3 proposed resource allocation (PFC full-probe, 384 ch)
+## pfcv3 resource allocation (PFC full-probe, 384 ch)
 
+Data from 999770, 107-min recording, 2 probes.
 Proportional billing on shared: 1 logical core ≈ 0.887 GB. Charged for `max(cores, memory/0.887)`.
 
 | Process | Peak RSS | +30% headroom | Actual cores | CPUs | Memory | Dominant | Equiv. charge | Partition |
@@ -103,7 +104,10 @@ Proportional billing on shared: 1 logical core ≈ 0.887 GB. Charged for `max(co
 | SORT_MS5 | 42-54 GB | 70 GB | ~45 | 64 | 72 GB | mem (81) | 81 | shared |
 | SORT_TDC2 | 64-84 GB | 109 GB | ~11 | 128 | 110 GB | mem (124) | 128 | shared |
 | SORT_LUPIN | 97-110 GB | 143 GB | ~14 | 128 | 144 GB | mem (162) | 162 | shared |
-| ANALYZE | 127-396 GB | 515 GB | ~12 | 128 | 230 GB | mem (259) | 259 | main |
+| ANALYZE_KS4 | 337-396 GB | 515 GB | ~12 | 128 | 230 GB | mem (259) | 259 | main |
+| ANALYZE_SC2 | 276-309 GB | 402 GB | ~14 | 128 | 230 GB | mem (259) | 259 | main |
+| ANALYZE_TDC2 | 127-155 GB | 202 GB | ~12 | 128 | 200 GB | mem (226) | 226 | shared |
+| ANALYZE_MS5 | 20-51 GB | 66 GB | ~11 | 64 | 72 GB | mem (81) | 81 | shared |
 | ANALYZE_LUPIN | 69-81 GB | 105 GB | ~23 | 32 | 96 GB | mem (108) | 108 | shared |
 | ADVANCED_CURATE | 1-11 GB | 14 GB | ~1 | 4 | 16 GB | mem (18) | 18 | shared |
 | ADV_CURATE_LPN | 12 GB | 16 GB | ~1 | 4 | 16 GB | mem (18) | 18 | shared |
@@ -115,24 +119,37 @@ Proportional billing on shared: 1 logical core ≈ 0.887 GB. Charged for `max(co
 
 Notes:
 - SORT_SC2 on main (128 cores flat) is cheaper than shared (~259 equiv cores).
-- ANALYZE is forced to main because KS4 analysis hits 396 GB. All sorter analyses
-  share the same process definition, so all go to main. Splitting ANALYZE per sorter
-  would allow TDC2 (155 GB) and MS5 (51 GB) analyses to go to shared (see below).
+- ANALYZE split per-sorter: KS4/SC2 → main (large nodes), TDC2/MS5 → shared.
 
-### Per-sorter ANALYZE breakdown (PFC, 999770, 107 min)
+## multishankv2 resource allocation (per-shank, ~96 ch NP2)
 
-ANALYZE memory and runtime vary enormously by sorter:
+Data from 1005256, 71-min recording, 4-shank NP2.
 
-| ANALYZE per sorter | Peak RSS | Cores | Runtime | +30% headroom | Could go to shared? |
-|---|---|---|---|---|---|
-| **KS4** | 337–396 GB | ~12 | 42–83 min | 515 GB | No (needs large or main) |
-| **SC2** | 276–309 GB | ~14 | 36–59 min | 402 GB | No |
-| **TDC2** | 127–155 GB | ~12 | 21–39 min | 202 GB | Yes (< 227 GB) |
-| **MS5** | 20–51 GB | ~11 | 12–19 min | 66 GB | Yes easily |
-| **Lupin** | 69–81 GB | ~23 | 57–78 min | 105 GB | Yes (already separate) |
+| Process | Peak RSS | +30% headroom | Actual cores | CPUs | Memory | Dominant | Equiv. charge | Partition |
+|---------|----------|--------------|-------------|------|--------|----------|--------------|-----------|
+| PREPROCESS | 149 GB | 194 GB | ~87 | 128 | 196 GB | mem (221) | 221 | shared |
+| SORT_KS4_BATCH | 13-16 GB | 21 GB | GPU | 288 | 480 GB | — | GPU alloc | gpugh |
+| SORT_SC2 | 65-116 GB | 151 GB | ~13 | 128 | 150 GB | mem (169) | 169 | shared |
+| SORT_MS5 | 9-30 GB | 39 GB | ~45 | 64 | 40 GB | cores (64) | 64 | shared |
+| SORT_TDC2 | 18-21 GB | 27 GB | ~11 | 16 | 28 GB | mem (32) | 32 | shared |
+| SORT_LUPIN | 52 GB | 68 GB | ~14 | 64 | 68 GB | mem (77) | 77 | shared |
+| ANALYZE_KS4 | 245-319 GB | 415 GB | ~30 | 128 | 230 GB | mem (259) | 259 | main |
+| ANALYZE_SC2 | 99-211 GB | 274 GB | ~37 | 128 | 230 GB | mem (259) | 259 | main |
+| ANALYZE_TDC2 | 17-26 GB | 34 GB | ~28 | 32 | 34 GB | mem (38) | 38 | shared |
+| ANALYZE_MS5 | 32-91 GB | 118 GB | ~39 | 64 | 118 GB | mem (133) | 133 | shared |
+| ANALYZE_LUPIN | 26 GB | 34 GB | ~39 | 48 | 34 GB | cores (48) | 48 | shared |
+| ADVANCED_CURATE | 1-5 GB | 7 GB | ~1 | 4 | 8 GB | mem (9) | 9 | shared |
+| ADV_CURATE_LPN | 6 GB | 8 GB | ~1 | 4 | 8 GB | mem (9) | 9 | shared |
+| COMPARE | 1 GB | 2 GB | ~1 | 4 | 16 GB | mem (18) | 18 | shared |
+| COMPARE_CLEAN | 0.4-0.6 GB | 1 GB | ~1 | 4 | 16 GB | mem (18) | 18 | shared |
+| CONSENSUS_DELTA | 85 MB | — | ~1 | 2 | 4 GB | mem (5) | 5 | shared |
+| CURATE | 46-49 MB | — | ~1 | 4 | 16 GB | mem (18) | 18 | shared |
 
-Splitting ANALYZE into per-sorter processes (ANALYZE_KS4, ANALYZE_SC2, ANALYZE_TDC2,
-ANALYZE_MS5) would allow TDC2 and MS5 analyses to run on shared instead of main.
+Notes:
+- PREPROCESS (149 GB) fits on shared — saves whole-node allocation.
+- SORT_SC2 (116 GB) fits on shared — big saving vs main for 4 shanks.
+- ANALYZE_SC2 stays on main — 211 GB + 30% = 274 GB exceeds 227 GB shared limit.
+- Per-shank data is ~4x lighter than full-probe, so more processes fit on shared.
 
 ## Measured peak RSS (pfcv2, full probe, 384 channels NP1, 107 min)
 
