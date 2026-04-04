@@ -1,21 +1,52 @@
 # Resource Allocation on Dardel (NAISS)
 
-## The problem: wasting allocation on whole-node exclusive jobs
+## Dardel compute nodes
 
-Dardel has two main CPU partitions:
+All nodes have dual-socket processors: 256 logical cores (128 physical × 2 hyperthreads).
+Source: https://support.pdc.kth.se/doc/run_jobs/job_scheduling/
 
-| Partition | Billing model | Limits |
-|-----------|--------------|--------|
-| `main` | **Whole-node exclusive** — you are charged for 128 core-hours per node-hour regardless of how many cores you use | 128 cores, 230 GB, 24h default |
-| `shared` | **Per-core** — you are charged only for the cores you request, for the time you actually use | up to 256 cores, up to 111 GB, up to 7 days |
+| Node type | Count | RAM | Available mem | Partitions |
+|-----------|-------|-----|---------------|------------|
+| Thin | 700 | 256 GB | ~227 GB | main, shared, long |
+| Large | 268 | 512 GB | ~457 GB | main, memory |
+| Huge | 8 | 1 TB | ~915 GB | main, memory |
+| Giant | 10 | 2 TB | ~1833 GB | memory |
+| GPU (AMD) | 62 | 512 GB | ~457 GB | gpu |
+| GPU (Nvidia GH200) | — | ~1.92 TB | — | gpugh |
 
-The routing rule (from the [nf-core PDC config](https://nf-co.re/configs/pdc_kth/)):
+### Partitions
 
+| Partition | Allocation | Max time | Nodes |
+|-----------|-----------|----------|-------|
+| `main` | Whole-node exclusive | 24h | thin, large, huge |
+| `long` | Whole-node exclusive | 7 days | thin only |
+| `shared` | Per-core (shared node) | 7 days | thin only |
+| `memory` | Whole-node exclusive | 7 days | large, huge, giant |
+| `gpu` | Whole-node exclusive | 24h | AMD GPU |
+| `gpugh` | Whole-node exclusive | 24h | Nvidia GH200 |
+
+### Shared partition: proportional billing
+
+On shared (thin nodes: 256 logical cores, 256 GB), cores and memory are
+proportionally linked. **Whichever request is larger determines billing**:
+- 20 cores → ~17 GB RAM
+- 80 GB memory → ~94 cores charged
+
+So requesting 120 GB memory on shared charges ~120/227 × 256 ≈ 135 logical
+cores (68 physical core-hours per node-hour), even if you only request 32 cpus.
+
+### Key correction
+
+The nf-core PDC config uses a 227 GB threshold for shared:
 ```groovy
 if (task.time <= 7.d && task.memory <= 111.GB && task.cpus <= 256) {
     slurm_opts << "-p shared"
 }
 ```
+This is **conservative** — thin nodes have ~227 GB available, not 227 GB.
+We use the full ~227 GB range for shared.
+
+## The problem: wasting allocation on whole-node exclusive jobs
 
 **We were sending nearly every process to `main`**, requesting 128 CPUs and 230 GB even for tasks that needed 4 cores and 1 GB of memory. This meant:
 
@@ -64,21 +95,21 @@ Note: `peak_rss` can include memory-mapped file pages (SpikeInterface memory-map
 
 ### Processes on `main` (whole-node exclusive)
 
-These processes genuinely need >111 GB memory or benefit from having all 128 cores:
+These processes genuinely need >227 GB memory or benefit from having all 128 cores:
 
-- **PREPROCESS** (128 cores, 230 GB): Measured 149 GB peak RSS with 4 shanks running in parallel. The parallel shank processing (4 x 32 cores) uses most of the node. 149 GB > 111 GB shared limit.
+- **PREPROCESS** (128 cores, 230 GB): Measured 149 GB peak RSS with 4 shanks running in parallel. The parallel shank processing (4 x 32 cores) uses most of the node. 149 GB > 227 GB shared limit.
 
-- **SORT_SC2** (128 cores, 230 GB): SpykingCircus2 hit 116 GB RSS on one shank (shank1, which had more detected spikes). This exceeds the 111 GB shared limit. Other shanks were 65-93 GB and would fit on shared, but we can't predict per-shank memory in advance.
+- **SORT_SC2** (128 cores, 230 GB): SpykingCircus2 hit 116 GB RSS on one shank (shank1, which had more detected spikes). This exceeds the 227 GB shared limit. Other shanks were 65-93 GB and would fit on shared, but we can't predict per-shank memory in advance.
 
 - **ANALYZE** (128 cores, 230 GB): The analysis step re-loads the full preprocessed recording plus all sorting results to compute waveforms, templates, quality metrics, etc. KiloSort4 analysis peaked at **319 GB** RSS (the KS4 sorting output is large). Other sorters' analyses were lower (17-211 GB) but KS4 analysis alone forces this onto `main`. Since all sorters use the same ANALYZE process definition, they all go to `main`.
 
 ### Processes on `shared` (per-core billing)
 
-These processes fit comfortably under 111 GB and don't need 128 cores:
+These processes fit comfortably under 227 GB and don't need 128 cores:
 
 - **SORT_TDC2** (16 cores, 32 GB): Only uses ~11 cores and 18-21 GB. Very fast (4-5 min). The most wasteful process on main — a full node for 5 minutes of 11-core work.
 
-- **SORT_MS5** (64 cores, 64 GB): Uses ~45 cores and 9-30 GB. Requesting 64 cores matches actual usage. Well under 111 GB.
+- **SORT_MS5** (64 cores, 64 GB): Uses ~45 cores and 9-30 GB. Requesting 64 cores matches actual usage. Well under 227 GB.
 
 - **SORT_LUPIN** (32 cores, 96 GB): Uses ~14 cores and ~52 GB. The template-matching phase is slow but not CPU-bound. With 5x time multiplier on shared, the generous limit costs nothing extra (pay for 32 cores x actual runtime, not 32 cores x time limit).
 
@@ -113,19 +144,19 @@ From trace of run 19177673 on subject 999770 (2 probes: imec0, imec1).
 | ADV_CURATE_LPN | 12-13 GB | ~1 core | 1-2 min | **shared** |
 
 *TDC2 was cached in this trace; estimate based on 4x multishank per-shank measurement.
-**SORT_MS5 fits on shared (53 GB < 111 GB) but is a candidate for removal (see below).
+**SORT_MS5 fits on shared (53 GB < 227 GB) but is a candidate for removal (see below).
 
 ### Key observations from pfcv2 trace
 
-1. **SORT_LUPIN** uses 98-110 GB on full probe — right at the 111 GB shared limit. Too risky to move to shared; stays on main.
+1. **SORT_LUPIN** uses 98-110 GB on full probe — well under the 227 GB shared limit. Moved to shared.
 
 2. **SORT_MS5** uses only 47-53 GB — could go to shared. However, MS5 is a candidate for removal from the pipeline entirely due to poor sorting quality compared to other sorters.
 
 3. **ANALYZE** memory varies enormously by sorter: KS4 analysis uses 391 GB (!) while MS5 analysis uses only 37 GB. Since they share one process definition, all go to main. The KS4 analysis memory is dominated by waveform extraction from the large KS4 sorting output.
 
-4. **ANALYZE_LUPIN** uses 69-77 GB — comfortably under 111 GB, moved to shared (32 cores, 96 GB).
+4. **ANALYZE_LUPIN** uses 69-77 GB — comfortably under 227 GB, moved to shared (32 cores, 96 GB).
 
-5. **SORT_SC2** timed out and never produced trace data. Based on multishank measurements (65-116 GB per shank), full-probe SC2 likely exceeds 111 GB. Stays on main.
+5. **SORT_SC2** timed out and never produced trace data. Based on multishank measurements (65-116 GB per shank), full-probe SC2 likely exceeds 227 GB. Stays on main.
 
 ## pfcv2 vs multishank: current partition assignments
 
@@ -137,8 +168,8 @@ From trace of run 19177673 on subject 999770 (2 probes: imec0, imec1).
 | SORT_KS4 | gpugh | 16 | 64 GB | GPU |
 | SORT_TDC2 | **shared** | 32 | 96 GB | ~80 GB |
 | SORT_SC2 | main | 128 | 230 GB | no data (timed out) |
-| SORT_MS5 | main | 128 | 230 GB | 47-53 GB (removal candidate) |
-| SORT_LUPIN | main | 128 | 230 GB | 98-110 GB (too close to 111 GB) |
+| SORT_MS5 | **shared** | 64 | 64 GB | 47-53 GB |
+| SORT_LUPIN | **shared** | 32 | 128 GB | 98-110 GB |
 | ANALYZE | main | 128 | 230 GB | 26-391 GB (KS4 drives this) |
 | ANALYZE_LUPIN | **shared** | 32 | 96 GB | 69-77 GB |
 | ADVANCED_CURATE | **shared** | 4 | 16 GB | 1-11 GB |
@@ -208,7 +239,7 @@ Key takeaways:
 - **Lupin is cheap when it completes** (90 ch) — both sort and analysis on shared. But slow shanks can time out and cost more.
 - **KS4** (147 ch) — sorting is free (GPU), but analysis is expensive on main (loads huge KS4 waveform data).
 - **MS5** (163 ch) — moderate cost, mostly on shared. If sorting quality is poor, this is wasted.
-- **SC2 is the most expensive** (496 ch) — sorting can exceed 111 GB (stays on main), and runtimes vary wildly (12 min to 66 min per shank). Some shanks time out entirely.
+- **SC2 is the most expensive** (496 ch) — sorting can exceed 227 GB (stays on main), and runtimes vary wildly (12 min to 66 min per shank). Some shanks time out entirely.
 
 ### Cost estimate: pfcv2 (1 probe, full 384 ch, 107-min recording)
 
@@ -237,7 +268,7 @@ From trace 19177673 (subject 999770, averaged across imec0/imec1).
 |--------|----------|-------------|-----------|-------------|-----------------|-------------|-------------|---------------------|
 | **KS4** | GPU | 43 min | GPU (0 CPU) | 355-391 GB | 63 min (main) | 134 | 0.3 | **135** |
 | **TDC2** | ~80 GB | 72 min | 38 (shared) | 131 GB | 39 min (main) | 83 | 0.3 | **121** |
-| **SC2** | >111 GB* | 65 min | 139 (main) | 283-299 GB | 58 min (main) | 124 | 0.3 | **263** |
+| **SC2** | >227 GB* | 65 min | 139 (main) | 283-299 GB | 58 min (main) | 124 | 0.3 | **263** |
 | **Lupin** | 98-110 GB | 2h 45m | 256 (main) | 69-77 GB | 68 min (shared) | 36 | 0.3 | **293** |
 | **MS5** | 47-53 GB | 2h 30m | 293 (main) | 26-37 GB | 19 min (main) | 41 | 0.3 | **334** |
 
