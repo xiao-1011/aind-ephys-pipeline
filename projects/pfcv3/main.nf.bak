@@ -1,0 +1,288 @@
+#!/usr/bin/env nextflow
+nextflow.enable.dsl = 2
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Input channel
+//
+// Accepts two layouts:
+//   --data_path /sessions_parent/          → discovers all sessions and probes
+//   --data_path /sessions_parent/session1/ → single session, all probes
+//
+// A SpikeGLX probe directory is identified by the presence of *.ap.meta files.
+// Recording duration is parsed from the .meta file (fileTimeSecs field) and
+// threaded through all processes for dynamic SLURM time allocation.
+//
+// The channel emits: (session_name, probe_name, duration_minutes, probe_dir_path)
+// ─────────────────────────────────────────────────────────────────────────────
+
+def discoverProbes() {
+    Channel
+        .fromPath("${params.data_path}/**/*.ap.meta")
+        .map { meta ->
+            // Parse fileTimeSecs from the SpikeGLX .meta file
+            def duration_sec = 0
+            meta.text.eachLine { line ->
+                if (line.startsWith('fileTimeSecs=')) {
+                    duration_sec = line.split('=')[1].trim().toFloat()
+                }
+            }
+            def duration_min = Math.max(1, Math.ceil(duration_sec / 60.0) as int)
+            def probe_dir = meta.parent
+            def session = probe_dir.parent.name
+            def probe   = probe_dir.name
+            tuple(session, probe, duration_min, probe_dir)
+        }
+        .unique { it[0..2] }  // deduplicate by session + probe + duration
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Processes
+// ─────────────────────────────────────────────────────────────────────────────
+
+process PREPROCESS {
+    tag "${session}/${probe}"
+
+    publishDir "${params.results_path}/${session}/${probe}",
+               mode: params.publish_mode, overwrite: true
+
+    input:
+    tuple val(session), val(probe), val(duration_minutes), path(probe_dir)
+
+    output:
+    tuple val(session), val(probe), val(duration_minutes), path('preprocessed'), emit: preprocessed
+    path 'motion_*',                                                             emit: motion, optional: true
+
+    script:
+    """
+    python ${projectDir}/scripts/01-preprocess.py \\
+        ${probe_dir} \\
+        .
+    """
+}
+
+process SORT_KS4 {
+    tag "${session}/${probe}"
+
+    publishDir "${params.results_path}/${session}/${probe}",
+               mode: params.publish_mode, overwrite: true
+
+    input:
+    tuple val(session), val(probe), val(duration_minutes), path('preprocessed')
+
+    output:
+    tuple val(session), val(probe), val(duration_minutes), path('sorter_kilosort4'), emit: sorter
+
+    script:
+    """
+    python ${projectDir}/scripts/02-sort.py \\
+        . \\
+        --sorters kilosort4
+    """
+}
+
+process SORT_SC2 {
+    tag "${session}/${probe}"
+
+    publishDir "${params.results_path}/${session}/${probe}",
+               mode: params.publish_mode, overwrite: true
+
+    input:
+    tuple val(session), val(probe), val(duration_minutes), path('preprocessed')
+
+    output:
+    tuple val(session), val(probe), val(duration_minutes), path('sorter_spykingcircus2'), emit: sorter
+
+    script:
+    """
+    python ${projectDir}/scripts/02-sort.py \\
+        . \\
+        --sorters spykingcircus2
+    """
+}
+
+process SORT_MS5 {
+    tag "${session}/${probe}"
+    errorStrategy 'ignore'
+
+    publishDir "${params.results_path}/${session}/${probe}",
+               mode: params.publish_mode, overwrite: true
+
+    input:
+    tuple val(session), val(probe), val(duration_minutes), path('preprocessed')
+
+    output:
+    tuple val(session), val(probe), val(duration_minutes), path('sorter_mountainsort5'), emit: sorter
+
+    script:
+    """
+    python ${projectDir}/scripts/02-sort.py \\
+        . \\
+        --sorters mountainsort5
+    """
+}
+
+process SORT_TDC2 {
+    tag "${session}/${probe}"
+    errorStrategy 'ignore'
+
+    publishDir "${params.results_path}/${session}/${probe}",
+               mode: params.publish_mode, overwrite: true
+
+    input:
+    tuple val(session), val(probe), val(duration_minutes), path('preprocessed')
+
+    output:
+    tuple val(session), val(probe), val(duration_minutes), path('sorter_tridesclous2'), emit: sorter
+
+    script:
+    """
+    python ${projectDir}/scripts/02-sort.py \\
+        . \\
+        --sorters tridesclous2
+    """
+}
+
+process COMPARE {
+    tag "${session}/${probe}"
+
+    publishDir "${params.results_path}/${session}/${probe}",
+               mode: params.publish_mode, overwrite: true
+
+    input:
+    tuple val(session), val(probe), val(duration_minutes), path(sorter_dirs)
+
+    output:
+    tuple val(session), val(probe), val(duration_minutes), path('consensus_labels.json'), emit: consensus
+    path 'consensus_plots',                                                               emit: plots, optional: true
+
+    script:
+    """
+    python ${projectDir}/scripts/06-compare.py \\
+        . \\
+        --agreement-threshold ${params.consensus_agreement_threshold} \\
+        --min-agreement       ${params.consensus_min_agreement}
+    """
+}
+
+process ANALYZE {
+    tag "${session}/${probe}"
+
+    publishDir "${params.results_path}/${session}/${probe}",
+               mode: params.publish_mode, overwrite: true
+
+    input:
+    tuple val(session), val(probe), val(duration_minutes), path('preprocessed'), path(sorter_dirs)
+
+    output:
+    tuple val(session), val(probe), val(duration_minutes), path('analyzer_*'), emit: analyzers
+
+    script:
+    """
+    python ${projectDir}/scripts/03-analyze.py .
+    """
+}
+
+process CURATE {
+    tag "${session}/${probe}"
+
+    publishDir "${params.results_path}/${session}/${probe}",
+               mode: params.publish_mode, overwrite: true
+
+    input:
+    tuple val(session), val(probe), val(duration_minutes), path(analyzer_dirs), path('consensus_labels.json')
+
+    output:
+    tuple val(session), val(probe), val(duration_minutes), path('curation_*.json'), emit: curation
+
+    script:
+    """
+    python ${projectDir}/scripts/04-curate.py \\
+        . \\
+        --isi-max              ${params.curation_isi_max} \\
+        --presence-min         ${params.curation_presence_min} \\
+        --amplitude-cutoff-max ${params.curation_amplitude_cutoff_max}
+    """
+}
+
+process NWB_EXPORT {
+    tag "${session}/${probe}"
+
+    publishDir "${params.results_path}/${session}/${probe}",
+               mode: params.publish_mode, overwrite: true
+
+    input:
+    tuple val(session), val(probe), val(duration_minutes),
+          path('preprocessed'), path(sorter_dirs), path(curation_files)
+
+    output:
+    tuple val(session), val(probe), path('*.nwb'), emit: nwb
+
+    script:
+    """
+    python ${projectDir}/scripts/05-export-nwb.py \\
+        . \\
+        --session-id ${session} \\
+        --probe-id   ${probe}
+    """
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Workflow
+//
+// DAG (per probe, all parallel across probes):
+//
+//   PREPROCESS
+//     ├─→ SORT_KS4  (GPU, required) ─→ ┐
+//     ├─→ SORT_SC2  (CPU, required) ─→ ┤─→ COMPARE ─→ ┐
+//     ├─→ SORT_MS5  (CPU, optional) ─→ ┤               │
+//     └─→ SORT_TDC2 (CPU, optional) ─→ ┘               │
+//                                       └─→ ANALYZE ─→ CURATE ─→ NWB_EXPORT
+//
+// MountainSort5 and Tridesclous2 use errorStrategy 'ignore' — if they fail,
+// the pipeline continues with whichever sorters succeeded.
+//
+// SLURM time allocations scale with recording duration (parsed from .ap.meta).
+// ─────────────────────────────────────────────────────────────────────────────
+
+workflow {
+
+    probes_ch = discoverProbes()
+    probes_ch.view { session, probe, dur, _ -> "Discovered probe: ${session}/${probe} (${dur} min)" }
+
+    preprocess_out = PREPROCESS(probes_ch)
+
+    // All four sorters run in parallel on the same preprocessed recording
+    sort_ks4_out  = SORT_KS4(preprocess_out.preprocessed)
+    sort_sc2_out  = SORT_SC2(preprocess_out.preprocessed)
+    sort_ms5_out  = SORT_MS5(preprocess_out.preprocessed)
+    sort_tdc2_out = SORT_TDC2(preprocess_out.preprocessed)
+
+    // Collect all successful sorter outputs per probe.
+    // Failed sorters (errorStrategy 'ignore') simply don't emit — the group
+    // contains only the sorters that succeeded.
+    // groupTuple by [0,1,2] keeps (session, probe, duration_minutes) as keys,
+    // only the sorter_dir (position 3) is grouped into a list.
+    all_sorters = sort_ks4_out.sorter
+        .mix(sort_sc2_out.sorter, sort_ms5_out.sorter, sort_tdc2_out.sorter)
+        .groupTuple(by: [0, 1, 2])
+    // Emits: (session, probe, duration_minutes, [sorter_dir1, sorter_dir2, ...])
+
+    // COMPARE: 06-compare.py discovers all sorter_* dirs automatically
+    compare_out = COMPARE(all_sorters)
+
+    // ANALYZE: 03-analyze.py discovers all sorter_* dirs automatically
+    analyze_in = preprocess_out.preprocessed
+        .join(all_sorters, by: [0, 1, 2])
+    analyze_out = ANALYZE(analyze_in)
+
+    // CURATE: 04-curate.py discovers all analyzer_* dirs automatically
+    curate_in = analyze_out.analyzers
+        .join(compare_out.consensus, by: [0, 1, 2])
+    curate_out = CURATE(curate_in)
+
+    // NWB_EXPORT: 05-export-nwb.py discovers all curation_*.json files automatically
+    nwb_in = preprocess_out.preprocessed
+        .join(all_sorters, by: [0, 1, 2])
+        .join(curate_out.curation, by: [0, 1, 2])
+    NWB_EXPORT(nwb_in)
+}

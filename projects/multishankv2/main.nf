@@ -63,29 +63,53 @@ process PREPROCESS {
         . \\
         --filter-type ${params.filter_type} \\
         ${params.use_spatial_filter ? '--spatial-filter' : '--no-spatial-filter'} \\
-        ${params.apply_motion_correction ? '--apply-motion' : '--no-apply-motion'}
+        ${params.apply_motion_correction ? '--apply-motion' : '--no-apply-motion'} \\
+        ${params.test_duration_sec > 0 ? "--max-duration-sec ${params.test_duration_sec}" : ''}
     """
 }
 
-process SORT_KS4 {
-    tag "${sid}/${probe}/${shank}"
+// SORT_KS4_BATCH: batch all shanks onto a single GPU node (4 GPUs).
+// Each shank gets its own GPU via CUDA_VISIBLE_DEVICES. This saves 4x GPU
+// allocation vs. 4 separate exclusive GPU node jobs.
+// Input tuple: (sid, probe, [shanks], dur, [preproc_dirs]) — grouped by probe.
+// Output: per-shank sorter_kilosort4 dirs under shank*/ subdirectories.
+process SORT_KS4_BATCH {
+    tag "${sid}/${probe}"
 
-    publishDir "${params.results_path}/${sid}/${probe}/${shank}",
+    publishDir "${params.results_path}/${sid}/${probe}",
                mode: params.publish_mode, overwrite: true
 
     input:
-    tuple val(sid), val(probe), val(shank), val(duration_minutes),
-          path(preproc_dir, stageAs: 'preprocessed')
+    tuple val(sid), val(probe), val(shanks), val(duration_minutes), path(preproc_dirs)
 
     output:
-    tuple val(sid), val(probe), val(shank), val(duration_minutes),
-          path('sorter_kilosort4'), emit: sorter
+    tuple val(sid), val(probe), val(shanks), val(duration_minutes),
+          path('*/sorter_kilosort4'), emit: sorters
 
     script:
+    def n = shanks.size()
     """
-    python ${projectDir}/scripts/02-sort.py \\
-        . \\
-        --sorters kilosort4
+    # Set up per-shank work directories with preprocessed symlinks
+    SHANKS=(${shanks.join(' ')})
+    DIRS=(${preproc_dirs.collect { it.name }.join(' ')})
+
+    for i in \$(seq 0 \$((${n} - 1))); do
+        mkdir -p \${SHANKS[\$i]}
+        ln -s \$(readlink -f \${DIRS[\$i]}) \${SHANKS[\$i]}/preprocessed
+    done
+
+    # Run all sorts in parallel — one GPU per shank
+    pids=()
+    for i in \$(seq 0 \$((${n} - 1))); do
+        CUDA_VISIBLE_DEVICES=\$i python ${projectDir}/scripts/02-sort.py \\
+            \${SHANKS[\$i]} --sorters kilosort4 &
+        pids+=(\$!)
+    done
+
+    # Wait for all — fail if any fail
+    for pid in "\${pids[@]}"; do
+        wait \$pid
+    done
     """
 }
 
@@ -395,23 +419,31 @@ process NWB_EXPORT {
 //     |
 //     +-- flatMap (fan out per shank) --+
 //                                       |
-//     +-- per shank: -------------------+
-//     |
-//     +--> SORT_KS4   (GPU) --> +
-//     +--> SORT_SC2   (CPU) --> +--> COMPARE (raw) --------------------------> +
-//     +--> SORT_MS5   (CPU) --> +-->  +                                        |
-//     +--> SORT_TDC2  (CPU) --> +    +--> ANALYZE      --> ADVANCED_CURATE --> +
-//     +--> SORT_LUPIN (CPU) --> +    +--> ANALYZE_LUPIN --> ADV_CURATE_LPN --> +--> COMPARE_CLEAN --> +
-//                                                                             |    |                  |
-//                                                                             |    +--> CONSENSUS_DELTA
-//                                                                             |                       |
-//                                                                             +---> CURATE <----------+
-//                                                                                     |
-//                                                                               [NWB_EXPORT]
+//     +-- per shank: -------------------+------+
+//     |                                        |
+//     |  +-- groupTuple (regroup shanks) --+   |
+//     |  |                                 |   |
+//     |  +--> SORT_KS4_BATCH (1 GPU node,  |   |
+//     |       4 GPUs, all shanks parallel)  |   |
+//     |  |                                 |   |
+//     |  +-- flatMap (fan back per shank) -+   |
+//     |       |                                |
+//     +--> sort_ks4 ──────────────────────> +  |
+//     +--> SORT_SC2   (CPU, per-shank) --> +--> COMPARE (raw) ──────────────> +
+//     +--> SORT_MS5   (CPU, per-shank) --> +-->  +                            |
+//     +--> SORT_TDC2  (CPU, per-shank) --> +    +--> ANALYZE      --> ADV_CURATE --> +
+//     +--> SORT_LUPIN (CPU, per-shank) --> +    +--> ANALYZE_LUPIN --> ADV_LPN  --> +--> COMPARE_CLEAN --> +
+//                                                                                  |    |                  |
+//                                                                                  |    +--> CONSENSUS_DELTA
+//                                                                                  |                       |
+//                                                                                  +---> CURATE <----------+
+//                                                                                          |
+//                                                                                    [NWB_EXPORT]
 //
 // PREPROCESS outputs preprocessed_shank0/ (and shank1..N for multi-shank).
-// flatMap fans out per-shank tuples; all downstream processes run independently
-// per shank. stageAs:'preprocessed' aliases shank dirs so scripts see ./preprocessed/.
+// flatMap fans out per-shank tuples; CPU sorters run independently per shank.
+// KS4 is regrouped per probe so all shanks share one exclusive GPU node (4x savings).
+// stageAs:'preprocessed' aliases shank dirs so scripts see ./preprocessed/.
 // ---------------------------------------------------------------------------
 
 workflow {
@@ -437,22 +469,39 @@ workflow {
         "  Shank: ${sid}/${probe}/${shank} (${dur} min)"
     }
 
-    // All five sorters run in parallel on the same preprocessed shank
-    sort_ks4_out   = SORT_KS4(shank_ch)
+    // ── KS4: batch all shanks onto 1 GPU node (4 GPUs) ────────────────
+    // Regroup shanks by probe so all run on a single exclusive GPU node.
+    // groupTuple by (sid[0], probe[1], dur[3]) → shanks[2] and dirs[4] become lists.
+    ks4_batch_in = shank_ch
+        .groupTuple(by: [0, 1, 3])
+
+    sort_ks4_batch_out = SORT_KS4_BATCH(ks4_batch_in)
+
+    // Fan back to per-shank tuples for downstream compatibility
+    sort_ks4_shank = sort_ks4_batch_out.sorters
+        .flatMap { sid, probe, shanks, dur, sorter_dirs ->
+            def dir_list = (sorter_dirs instanceof List) ? sorter_dirs : [sorter_dirs]
+            dir_list.collect { dir ->
+                def shank = dir.parent.name   // "shank0", "shank1", etc.
+                tuple(sid, probe, shank, dur, dir)
+            }
+        }
+
+    // CPU sorters run per-shank (individual SLURM jobs)
     sort_sc2_out   = SORT_SC2(shank_ch)
     sort_ms5_out   = SORT_MS5(shank_ch)
     sort_tdc2_out  = SORT_TDC2(shank_ch)
     sort_lupin_out = SORT_LUPIN(shank_ch)
 
     // ── COMPARE (raw): all sorter_* folders grouped per shank ─────────
-    all_sorters = sort_ks4_out.sorter
+    all_sorters = sort_ks4_shank
         .mix(sort_sc2_out.sorter, sort_ms5_out.sorter, sort_tdc2_out.sorter, sort_lupin_out.sorter)
         .groupTuple(by: [0, 1, 2, 3])
 
     compare_out = COMPARE(all_sorters)
 
     // ── ANALYZE: one SLURM job per sorter (parallel) ──────────────────
-    all_sorter_individual = sort_ks4_out.sorter
+    all_sorter_individual = sort_ks4_shank
         .mix(sort_sc2_out.sorter, sort_ms5_out.sorter, sort_tdc2_out.sorter)
 
     analyze_in = shank_ch

@@ -57,27 +57,51 @@ process PREPROCESS {
     """
     python ${projectDir}/scripts/01-preprocess.py \\
         ${probe_dir} \\
-        .
+        . \\
+        ${params.test_duration_sec > 0 ? "--max-duration-sec ${params.test_duration_sec}" : ''}
     """
 }
 
-process SORT_KS4 {
-    tag "${sid}/${probe}"
+// SORT_KS4_BATCH: batch up to 4 probes onto a single GPU node (4 GPUs).
+// buffer(size:4, remainder:true) collects probes as they finish PREPROCESS.
+// Each probe gets its own GPU via CUDA_VISIBLE_DEVICES.
+// 4x GPU allocation savings vs. separate exclusive GPU node per probe.
+process SORT_KS4_BATCH {
+    tag "batch[${sids.join(',')}]"
 
-    publishDir "${params.results_path}/${sid}/${probe}",
-               mode: params.publish_mode, overwrite: true
+    // No publishDir — sorter output published indirectly via ANALYZE downstream.
+    // Avoids complex per-probe publish logic in a batched process.
 
     input:
-    tuple val(sid), val(probe), val(duration_minutes), path('preprocessed')
+    tuple val(sids), val(probes), val(durs), path(preproc_dirs)
 
     output:
-    tuple val(sid), val(probe), val(duration_minutes), path('sorter_kilosort4'), emit: sorter
+    tuple val(sids), val(probes), val(durs),
+          path('probe_*/sorter_kilosort4'), emit: sorters
 
     script:
+    def n = sids.size()
     """
-    python ${projectDir}/scripts/02-sort.py \\
-        . \\
-        --sorters kilosort4
+    # Set up per-probe work directories with preprocessed symlinks
+    DIRS=(${preproc_dirs.collect { it.name }.join(' ')})
+
+    for i in \$(seq 0 \$((${n} - 1))); do
+        mkdir -p probe_\${i}
+        ln -s \$(readlink -f \${DIRS[\$i]}) probe_\${i}/preprocessed
+    done
+
+    # Run all sorts in parallel — one GPU per probe
+    pids=()
+    for i in \$(seq 0 \$((${n} - 1))); do
+        CUDA_VISIBLE_DEVICES=\$i python ${projectDir}/scripts/02-sort.py \\
+            probe_\${i} --sorters kilosort4 &
+        pids+=(\$!)
+    done
+
+    # Wait for all — fail if any fail
+    for pid in "\${pids[@]}"; do
+        wait \$pid
+    done
     """
 }
 
@@ -386,27 +410,25 @@ process NWB_EXPORT {
 //
 // DAG (per probe, all parallel across probes):
 //
-//   PREPROCESS
-//     ├─→ SORT_KS4   (GPU) ──→ ┐
-//     ├─→ SORT_SC2   (CPU) ──→ ├──→ COMPARE (raw) ───────────────────────────────→ ┐
-//     ├─→ SORT_MS5   (CPU) ──→ ├──→ ┐                                               │
-//     ├─→ SORT_TDC2  (CPU) ──→ ┤    ├──→ ANALYZE      ──→ ADVANCED_CURATE ──→ ┐    │
-//     └─→ SORT_LUPIN (CPU) ──→ ┘    └──→ ANALYZE_LUPIN ──→ ADV_CURATE_LPN ──→ ├→ COMPARE_CLEAN ─→ ┐
-//                                                                              │    │                │
-//                                                                              │    └─→ CONSENSUS_DELTA
-//                                                                              │                     │
-//                                                                              └───→ CURATE ←────────┘
-//                                                                                      │
-//                                                                                [NWB_EXPORT]
+//   PREPROCESS ──→ buffer(4) ──→ SORT_KS4_BATCH (1 GPU node, 4 GPUs) ──→ flatMap
+//     │                                                                      │
+//     ├─→ SORT_SC2   (CPU, immediate) ──→ ┐                                  │
+//     ├─→ SORT_MS5   (CPU, immediate) ──→ ├── + ks4 ──→ COMPARE (raw) ──────────→ ┐
+//     ├─→ SORT_TDC2  (CPU, immediate) ──→ ┤             ┐                          │
+//     └─→ SORT_LUPIN (CPU, immediate) ──→ ┘   ├──→ ANALYZE      ──→ ADV_CURATE ──→ ┐
+//                                             └──→ ANALYZE_LUPIN ──→ ADV_LPN ──→ ├→ COMPARE_CLEAN ─→ ┐
+//                                                                               │    │                │
+//                                                                               │    └─→ CONSENSUS_DELTA
+//                                                                               │                     │
+//                                                                               └───→ CURATE ←────────┘
+//                                                                                       │
+//                                                                                 [NWB_EXPORT]
 //
-// ANALYZE runs one SLURM job per sorter (4-5 parallel jobs per probe).
-// ADVANCED_CURATE removes redundant/noise units, merges splits, labels with
-// bombcell + UnitRefine. Produces clean sortings for COMPARE_CLEAN.
-// CONSENSUS_DELTA compares raw vs clean consensus (delta plots + summary).
+// KS4 uses buffer(size:4, remainder:true) to batch 4 probes per GPU node.
+// CPU sorters run immediately per-probe; KS4 fires when 4 probes are ready.
+// COMPARE waits naturally for KS4 (groupTuple needs all sorters).
 //
-// Optional sorters (MS5, TDC2, Lupin) use errorStrategy 'ignore' — if they
-// fail, the pipeline continues with whichever sorters succeeded.
-//
+// Optional sorters (MS5, TDC2, Lupin) use errorStrategy 'ignore'.
 // NWB_EXPORT is off by default (params.run_nwb_export).
 // SLURM time allocations scale with recording duration (parsed from .ap.meta).
 // ─────────────────────────────────────────────────────────────────────────────
@@ -418,26 +440,51 @@ workflow {
 
     preprocess_out = PREPROCESS(probes_ch)
 
-    // All five sorters run in parallel on the same preprocessed recording
-    sort_ks4_out   = SORT_KS4(preprocess_out.preprocessed)
+    // ── KS4: batch up to 4 probes onto 1 GPU node (4 GPUs) ──────────────
+    // buffer collects 4 preprocessed probes eagerly, then fires one GPU job.
+    // remainder:true ensures the last batch (<4 probes) still runs.
+    ks4_batch_ch = preprocess_out.preprocessed
+        .buffer(size: 4, remainder: true)
+        .map { batch ->
+            def sids   = batch.collect { it[0] }
+            def probes = batch.collect { it[1] }
+            def durs   = batch.collect { it[2] }
+            def dirs   = batch.collect { it[3] }
+            tuple(sids, probes, durs, dirs)
+        }
+
+    sort_ks4_batch_out = SORT_KS4_BATCH(ks4_batch_ch)
+
+    // Fan back to per-probe tuples for downstream compatibility
+    sort_ks4_individual = sort_ks4_batch_out.sorters
+        .flatMap { sids, probes, durs, sorter_dirs ->
+            def dir_list = (sorter_dirs instanceof List) ? sorter_dirs : [sorter_dirs]
+            dir_list.collect { dir ->
+                def idx = dir.parent.name.replace('probe_', '').toInteger()
+                tuple(sids[idx], probes[idx], durs[idx], dir)
+            }
+        }
+
+    // CPU sorters run immediately per-probe (no batching, no waiting)
     sort_sc2_out   = SORT_SC2(preprocess_out.preprocessed)
     sort_ms5_out   = SORT_MS5(preprocess_out.preprocessed)
     sort_tdc2_out  = SORT_TDC2(preprocess_out.preprocessed)
     sort_lupin_out = SORT_LUPIN(preprocess_out.preprocessed)
 
     // ── COMPARE (raw): all sorter_* folders grouped ─────────────────────
-    all_sorters = sort_ks4_out.sorter
+    // Waits for KS4 batch to complete for each probe before firing.
+    all_sorters = sort_ks4_individual
         .mix(sort_sc2_out.sorter, sort_ms5_out.sorter, sort_tdc2_out.sorter, sort_lupin_out.sorter)
         .groupTuple(by: [0, 1, 2])
 
     compare_out = COMPARE(all_sorters)
 
     // ── ANALYZE: one SLURM job per sorter (parallel) ────────────────────
-    all_sorter_individual = sort_ks4_out.sorter
+    all_sorter_individual_for_analyze = sort_ks4_individual
         .mix(sort_sc2_out.sorter, sort_ms5_out.sorter, sort_tdc2_out.sorter)
 
     analyze_in = preprocess_out.preprocessed
-        .combine(all_sorter_individual, by: [0, 1, 2])
+        .combine(all_sorter_individual_for_analyze, by: [0, 1, 2])
     analyze_out = ANALYZE(analyze_in)
 
     analyze_lupin_in = preprocess_out.preprocessed
