@@ -138,28 +138,23 @@ process SORT_SC2 {
     """
 }
 
-process SORT_MS5 {
-    tag "${sid}/${probe}/${shank}"
-    errorStrategy 'ignore'
-
-    publishDir "${params.results_path}/${sid}/${probe}/${shank}",
-               mode: params.publish_mode, overwrite: true
-
-    input:
-    tuple val(sid), val(probe), val(shank), val(duration_minutes),
-          path(preproc_dir, stageAs: 'preprocessed')
-
-    output:
-    tuple val(sid), val(probe), val(shank), val(duration_minutes),
-          path('sorter_mountainsort5'), emit: sorter
-
-    script:
-    """
-    python ${projectDir}/scripts/02-sort.py \\
-        . \\
-        --sorters mountainsort5
-    """
-}
+// SORT_MS5: disabled — consistently fails across all shanks.
+// process SORT_MS5 {
+//     tag "${sid}/${probe}/${shank}"
+//     errorStrategy 'ignore'
+//     publishDir "${params.results_path}/${sid}/${probe}/${shank}",
+//                mode: params.publish_mode, overwrite: true
+//     input:
+//     tuple val(sid), val(probe), val(shank), val(duration_minutes),
+//           path(preproc_dir, stageAs: 'preprocessed')
+//     output:
+//     tuple val(sid), val(probe), val(shank), val(duration_minutes),
+//           path('sorter_mountainsort5'), emit: sorter
+//     script:
+//     """
+//     python ${projectDir}/scripts/02-sort.py . --sorters mountainsort5
+//     """
+// }
 
 process SORT_TDC2 {
     tag "${sid}/${probe}/${shank}"
@@ -290,25 +285,22 @@ process ANALYZE_TDC2 {
     """
 }
 
-process ANALYZE_MS5 {
-    tag "${sid}/${probe}/${shank}/${sorter_dir.name}"
-
-    publishDir "${params.results_path}/${sid}/${probe}/${shank}",
-               mode: params.publish_mode, overwrite: true
-
-    input:
-    tuple val(sid), val(probe), val(shank), val(duration_minutes),
-          path(preproc_dir, stageAs: 'preprocessed'), path(sorter_dir)
-
-    output:
-    tuple val(sid), val(probe), val(shank), val(duration_minutes),
-          path('analyzer_*'), emit: analyzer
-
-    script:
-    """
-    python ${projectDir}/scripts/03-analyze.py . --sorter_folder ${sorter_dir}
-    """
-}
+// ANALYZE_MS5: disabled — MS5 sorter consistently fails.
+// process ANALYZE_MS5 {
+//     tag "${sid}/${probe}/${shank}/${sorter_dir.name}"
+//     publishDir "${params.results_path}/${sid}/${probe}/${shank}",
+//                mode: params.publish_mode, overwrite: true
+//     input:
+//     tuple val(sid), val(probe), val(shank), val(duration_minutes),
+//           path(preproc_dir, stageAs: 'preprocessed'), path(sorter_dir)
+//     output:
+//     tuple val(sid), val(probe), val(shank), val(duration_minutes),
+//           path('analyzer_*'), emit: analyzer
+//     script:
+//     """
+//     python ${projectDir}/scripts/03-analyze.py . --sorter_folder ${sorter_dir}
+//     """
+// }
 
 process ANALYZE_LUPIN {
     tag "${sid}/${probe}/${shank}/${sorter_dir.name}"
@@ -493,11 +485,10 @@ process NWB_EXPORT {
 //     |       |                                |
 //     +--> sort_ks4 ──────────────────────> +  |
 //     +--> SORT_SC2   (CPU, per-shank) --> +--> COMPARE (raw) ──────────────────> +
-//     +--> SORT_MS5   (CPU, per-shank) --> +-->  +                                |
-//     +--> SORT_TDC2  (CPU, per-shank) --> +    +--> ANALYZE_KS4  --> ADV_CURATE --> +
-//     +--> SORT_LUPIN (CPU, per-shank) --> +    +--> ANALYZE_SC2  --> ADV_CURATE --> +
+//     +--> SORT_TDC2  (CPU, per-shank) --> +-->  +                                |
+//     +--> SORT_LUPIN (CPU, per-shank) --> +    +--> ANALYZE_KS4  --> ADV_CURATE --> +
+//                                               +--> ANALYZE_SC2  --> ADV_CURATE --> +
 //                                               +--> ANALYZE_TDC2 --> ADV_CURATE --> +
-//                                               +--> ANALYZE_MS5  --> ADV_CURATE --> +
 //                                               +--> ANALYZE_LUPIN --> ADV_LPN   --> +--> COMPARE_CLEAN --> +
 //                                                                                   |    |                  |
 //                                                                                   |    +--> CONSENSUS_DELTA
@@ -555,13 +546,13 @@ workflow {
 
     // CPU sorters run per-shank (individual SLURM jobs)
     sort_sc2_out   = SORT_SC2(shank_ch)
-    sort_ms5_out   = SORT_MS5(shank_ch)
+    // sort_ms5_out   = SORT_MS5(shank_ch)  // MS5 disabled
     sort_tdc2_out  = SORT_TDC2(shank_ch)
     sort_lupin_out = SORT_LUPIN(shank_ch)
 
     // ── COMPARE (raw): all sorter_* folders grouped per shank ─────────
     all_sorters = sort_ks4_shank
-        .mix(sort_sc2_out.sorter, sort_ms5_out.sorter, sort_tdc2_out.sorter, sort_lupin_out.sorter)
+        .mix(sort_sc2_out.sorter, sort_tdc2_out.sorter, sort_lupin_out.sorter)
         .groupTuple(by: [0, 1, 2, 3])
 
     compare_out = COMPARE(all_sorters)
@@ -579,9 +570,9 @@ workflow {
         .combine(sort_tdc2_out.sorter, by: [0, 1, 2, 3])
     analyze_tdc2_out = ANALYZE_TDC2(analyze_tdc2_in)
 
-    analyze_ms5_in = shank_ch
-        .combine(sort_ms5_out.sorter, by: [0, 1, 2, 3])
-    analyze_ms5_out = ANALYZE_MS5(analyze_ms5_in)
+    // analyze_ms5_in = shank_ch                              // MS5 disabled
+    //     .combine(sort_ms5_out.sorter, by: [0, 1, 2, 3])
+    // analyze_ms5_out = ANALYZE_MS5(analyze_ms5_in)
 
     analyze_lupin_in = shank_ch
         .combine(sort_lupin_out.sorter, by: [0, 1, 2, 3])
@@ -589,7 +580,7 @@ workflow {
 
     // ── ADVANCED_CURATE: per-sorter (parallel) ────────────────────────
     all_analyze_non_lupin = analyze_ks4_out.analyzer
-        .mix(analyze_sc2_out.analyzer, analyze_tdc2_out.analyzer, analyze_ms5_out.analyzer)
+        .mix(analyze_sc2_out.analyzer, analyze_tdc2_out.analyzer)
 
     adv_curate_in = shank_ch
         .combine(all_analyze_non_lupin, by: [0, 1, 2, 3])
@@ -613,7 +604,7 @@ workflow {
     // ── CURATE: merges all labels + both consensuses ──────────────────
     all_analyzers = analyze_ks4_out.analyzer
         .mix(analyze_sc2_out.analyzer, analyze_tdc2_out.analyzer,
-             analyze_ms5_out.analyzer, analyze_lupin_out.analyzer)
+             analyze_lupin_out.analyzer)
         .groupTuple(by: [0, 1, 2, 3])
 
     all_adv_labels = adv_curate_out.adv_labels

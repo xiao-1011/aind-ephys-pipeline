@@ -127,26 +127,21 @@ process SORT_SC2 {
     """
 }
 
-process SORT_MS5 {
-    tag "${sid}/${probe}"
-    errorStrategy 'ignore'
-
-    publishDir "${params.results_path}/${sid}/${probe}",
-               mode: params.publish_mode, overwrite: true
-
-    input:
-    tuple val(sid), val(probe), val(duration_minutes), path('preprocessed')
-
-    output:
-    tuple val(sid), val(probe), val(duration_minutes), path('sorter_mountainsort5'), emit: sorter
-
-    script:
-    """
-    python ${projectDir}/scripts/02-sort.py \\
-        . \\
-        --sorters mountainsort5
-    """
-}
+// SORT_MS5: disabled — consistently fails across all probes.
+// process SORT_MS5 {
+//     tag "${sid}/${probe}"
+//     errorStrategy 'ignore'
+//     publishDir "${params.results_path}/${sid}/${probe}",
+//                mode: params.publish_mode, overwrite: true
+//     input:
+//     tuple val(sid), val(probe), val(duration_minutes), path('preprocessed')
+//     output:
+//     tuple val(sid), val(probe), val(duration_minutes), path('sorter_mountainsort5'), emit: sorter
+//     script:
+//     """
+//     python ${projectDir}/scripts/02-sort.py . --sorters mountainsort5
+//     """
+// }
 
 process SORT_TDC2 {
     tag "${sid}/${probe}"
@@ -264,21 +259,22 @@ process ANALYZE_TDC2 {
     """
 }
 
-process ANALYZE_MS5 {
-    tag "${sid}/${probe}/${sorter_dir.name}"
-    publishDir "${params.results_path}/${sid}/${probe}",
-               mode: params.publish_mode, overwrite: true
-    input:
-    tuple val(sid), val(probe), val(duration_minutes),
-          path('preprocessed'), path(sorter_dir)
-    output:
-    tuple val(sid), val(probe), val(duration_minutes),
-          path('analyzer_*'), emit: analyzer
-    script:
-    """
-    python ${projectDir}/scripts/03-analyze.py . --sorter_folder ${sorter_dir}
-    """
-}
+// ANALYZE_MS5: disabled — MS5 sorter consistently fails.
+// process ANALYZE_MS5 {
+//     tag "${sid}/${probe}/${sorter_dir.name}"
+//     publishDir "${params.results_path}/${sid}/${probe}",
+//                mode: params.publish_mode, overwrite: true
+//     input:
+//     tuple val(sid), val(probe), val(duration_minutes),
+//           path('preprocessed'), path(sorter_dir)
+//     output:
+//     tuple val(sid), val(probe), val(duration_minutes),
+//           path('analyzer_*'), emit: analyzer
+//     script:
+//     """
+//     python ${projectDir}/scripts/03-analyze.py . --sorter_folder ${sorter_dir}
+//     """
+// }
 
 // ANALYZE_LUPIN uses the lupin container (SI 0.104.0) since it must read
 // lupin's sorting output format. Identical script to ANALYZE.
@@ -458,14 +454,12 @@ process NWB_EXPORT {
 //   PREPROCESS ──→ buffer(4) ──→ SORT_KS4_BATCH (1 GPU node, 4 GPUs) ──→ flatMap
 //     │                                                                      │
 //     ├─→ SORT_SC2   (CPU, immediate) ──→ ┐                                  │
-//     ├─→ SORT_MS5   (CPU, immediate) ──→ ├── + ks4 ──→ COMPARE (raw) ──────────→ ┐
-//     ├─→ SORT_TDC2  (CPU, immediate) ──→ ┤                                       │
-//     └─→ SORT_LUPIN (CPU, immediate) ──→ ┘                                        │
+//     ├─→ SORT_TDC2  (CPU, immediate) ──→ ├── + ks4 ──→ COMPARE (raw) ──────────→ ┐
+//     └─→ SORT_LUPIN (CPU, immediate) ──→ ┘                                       │
 //                                                                                  │
 //     ks4 ──→ ANALYZE_KS4 (main)  ─┐                                              │
 //     sc2 ──→ ANALYZE_SC2 (main)  ─┤──→ ADV_CURATE ──→ ┐                          │
-//     tdc2──→ ANALYZE_TDC2 (shared)─┤                    ├→ COMPARE_CLEAN ─→ ┐     │
-//     ms5 ──→ ANALYZE_MS5 (shared)─┘                    │    │                │     │
+//     tdc2──→ ANALYZE_TDC2 (shared)─┘                    ├→ COMPARE_CLEAN ─→ ┐     │
 //     lupin─→ ANALYZE_LUPIN (shared)──→ ADV_LPN ───────→┘    └─→ CONSENSUS_DELTA  │
 //                                                                            │     │
 //                                                            CURATE ←────────┘←────┘
@@ -476,7 +470,7 @@ process NWB_EXPORT {
 // CPU sorters run immediately per-probe; KS4 fires when 4 probes are ready.
 // COMPARE waits naturally for KS4 (groupTuple needs all sorters).
 //
-// Optional sorters (MS5, TDC2, Lupin) use errorStrategy 'ignore'.
+// Optional sorters (TDC2, Lupin) use errorStrategy 'ignore'.
 // NWB_EXPORT is off by default (params.run_nwb_export).
 // SLURM time allocations scale with recording duration (parsed from .ap.meta).
 // ─────────────────────────────────────────────────────────────────────────────
@@ -515,14 +509,14 @@ workflow {
 
     // CPU sorters run immediately per-probe (no batching, no waiting)
     sort_sc2_out   = SORT_SC2(preprocess_out.preprocessed)
-    sort_ms5_out   = SORT_MS5(preprocess_out.preprocessed)
+    // sort_ms5_out   = SORT_MS5(preprocess_out.preprocessed)  // MS5 disabled
     sort_tdc2_out  = SORT_TDC2(preprocess_out.preprocessed)
     sort_lupin_out = SORT_LUPIN(preprocess_out.preprocessed)
 
     // ── COMPARE (raw): all sorter_* folders grouped ─────────────────────
     // Waits for KS4 batch to complete for each probe before firing.
     all_sorters = sort_ks4_individual
-        .mix(sort_sc2_out.sorter, sort_ms5_out.sorter, sort_tdc2_out.sorter, sort_lupin_out.sorter)
+        .mix(sort_sc2_out.sorter, sort_tdc2_out.sorter, sort_lupin_out.sorter)
         .groupTuple(by: [0, 1, 2])
 
     compare_out = COMPARE(all_sorters)
@@ -543,9 +537,9 @@ workflow {
         .combine(sort_tdc2_out.sorter, by: [0, 1, 2])
     analyze_tdc2_out = ANALYZE_TDC2(analyze_tdc2_in)
 
-    analyze_ms5_in = preprocess_out.preprocessed
-        .combine(sort_ms5_out.sorter, by: [0, 1, 2])
-    analyze_ms5_out = ANALYZE_MS5(analyze_ms5_in)
+    // analyze_ms5_in = preprocess_out.preprocessed          // MS5 disabled
+    //     .combine(sort_ms5_out.sorter, by: [0, 1, 2])
+    // analyze_ms5_out = ANALYZE_MS5(analyze_ms5_in)
 
     analyze_lupin_in = preprocess_out.preprocessed
         .combine(sort_lupin_out.sorter, by: [0, 1, 2])
@@ -553,7 +547,7 @@ workflow {
 
     // Mix all non-Lupin analyzer outputs for ADVANCED_CURATE
     all_analyze_non_lupin = analyze_ks4_out.analyzer
-        .mix(analyze_sc2_out.analyzer, analyze_tdc2_out.analyzer, analyze_ms5_out.analyzer)
+        .mix(analyze_sc2_out.analyzer, analyze_tdc2_out.analyzer)
 
     // ── ADVANCED_CURATE: per-sorter (parallel) ──────────────────────────
     // Produces clean sortings (noise removed + merged) + label JSONs.
@@ -579,7 +573,7 @@ workflow {
     // ── CURATE: merges all labels + both consensuses ────────────────────
     all_analyzers = analyze_ks4_out.analyzer
         .mix(analyze_sc2_out.analyzer, analyze_tdc2_out.analyzer,
-             analyze_ms5_out.analyzer, analyze_lupin_out.analyzer)
+             analyze_lupin_out.analyzer)
         .groupTuple(by: [0, 1, 2])
 
     all_adv_labels = adv_curate_out.adv_labels

@@ -11,7 +11,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 #SBATCH -A naiss2026-3-127
-#SBATCH -t 5:00:00
+#SBATCH -t 7-00:00:00
 #SBATCH -n 1
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=8G
@@ -37,7 +37,7 @@ export DATA_PATH="/cfs/klemming/projects/supr/dmclab/Joana/Raw_data/986169"
 PIPELINE_PATH="/cfs/klemming/projects/supr/dmclab/aind-ephys-pipeline-pfc"
 
 # Output base for this project (separate from pfc v1)
-OUTPUT_BASE="/cfs/klemming/projects/supr/dmclab/ephys-pipeline-output/pfcv3-test"
+OUTPUT_BASE="/cfs/klemming/projects/supr/dmclab/ephys-pipeline-output/pfcv3"
 export RESULTS_PATH="${OUTPUT_BASE}/results"
 WORKDIR="${OUTPUT_BASE}/work"
 LOGDIR="${OUTPUT_BASE}/logs"
@@ -141,7 +141,7 @@ $NF_BIN \
     -with-report   "${LOGDIR}/${SLURM_JOB_ID}_report.html" \
     -with-trace    "${LOGDIR}/${SLURM_JOB_ID}_trace.txt" \
     -with-timeline "${LOGDIR}/${SLURM_JOB_ID}_timeline.html" \
-    --test_duration_sec 600
+    -resume
 
 echo "Job finished"
 date

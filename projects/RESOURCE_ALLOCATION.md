@@ -93,63 +93,77 @@ Note: `peak_rss` can include memory-mapped file pages (SpikeInterface memory-map
 
 ## pfcv3 resource allocation (PFC full-probe, 384 ch)
 
-Data from 999770, 107-min recording, 2 probes.
-Proportional billing on shared: 1 logical core ≈ 0.887 GB. Charged for `max(cores, memory/0.887)`.
+### Current config vs measured (pfcv3 10-min test, 986169, 2 sessions × 2 probes)
 
-| Process | Peak RSS | +30% headroom | Actual cores | CPUs | Memory | Dominant | Equiv. charge | Partition |
-|---------|----------|--------------|-------------|------|--------|----------|--------------|-----------|
-| PREPROCESS | 47-61 GB | 79 GB | 128 (n_jobs) | 128 | 96 GB | cores (128) | 128 | shared |
-| SORT_KS4_BATCH | 25-34 GB | 44 GB | GPU | 288 | 480 GB | — | GPU alloc | gpugh |
-| SORT_SC2 | 141-162 GB | 211 GB | ~13 | 128 | 230 GB | mem (259) | 259 | main |
-| SORT_MS5 | 42-54 GB | 70 GB | ~45 | 64 | 72 GB | mem (81) | 81 | shared |
-| SORT_TDC2 | 64-84 GB | 109 GB | ~11 | 128 | 110 GB | mem (124) | 128 | shared |
-| SORT_LUPIN | 97-110 GB | 143 GB | ~14 | 128 | 144 GB | mem (162) | 162 | shared |
-| ANALYZE_KS4 | 337-396 GB | 515 GB | ~12 | 128 | 230 GB | mem (259) | 259 | main |
-| ANALYZE_SC2 | 276-309 GB | 402 GB | ~14 | 128 | 230 GB | mem (259) | 259 | main |
-| ANALYZE_TDC2 | 127-155 GB | 202 GB | ~12 | 128 | 200 GB | mem (226) | 226 | shared |
-| ANALYZE_MS5 | 20-51 GB | 66 GB | ~11 | 64 | 72 GB | mem (81) | 81 | shared |
-| ANALYZE_LUPIN | 69-81 GB | 105 GB | ~23 | 32 | 96 GB | mem (108) | 108 | shared |
-| ADVANCED_CURATE | 1-11 GB | 14 GB | ~1 | 4 | 16 GB | mem (18) | 18 | shared |
-| ADV_CURATE_LPN | 12 GB | 16 GB | ~1 | 4 | 16 GB | mem (18) | 18 | shared |
-| COMPARE | 2-3 GB | 4 GB | ~1 | 4 | 16 GB | mem (18) | 18 | shared |
-| COMPARE_CLEAN | 0.4-1.3 GB | 2 GB | ~1 | 4 | 16 GB | mem (18) | 18 | shared |
-| CONSENSUS_DELTA | 85 MB | — | ~1 | 2 | 4 GB | mem (5) | 5 | shared |
-| CURATE | 50-88 MB | — | ~1 | 4 | 16 GB | mem (18) | 18 | shared |
-| NWB_EXPORT | — | — | — | 4 | 16 GB | mem (18) | 18 | shared |
+MS5 disabled. Data from trace 19286467. Full recordings (~107 min) NOT yet measured.
+
+| Process | Req CPUs | Req Mem | Partition | Actual RSS | Actual CPUs | Comment |
+|---------|----------|---------|-----------|------------|-------------|---------|
+| PREPROCESS | 128 | 230 GB | main | 169–186 GB | ~47–59 | OK. Streaming/chunked, similar on full recordings |
+| SORT_KS4_BATCH | 288 | 480 GB | gpugh | 26 GB | ~73 | OK. GPU node, 4 probes batched |
+| SORT_SC2 | 64 | 200 GB | shared | 87–129 GB | ~16–18 | 10x time. Unknown on full recordings — could exceed 200 GB |
+| SORT_TDC2 | 128 | 110 GB | shared | 34–44 GB | ~10–13 | Overprovisioned on CPU, could reduce to 64 |
+| SORT_LUPIN | 64 | 200 GB | shared | 64–91 GB | ~11–14 | 10x time. Unknown on full recordings |
+| ANALYZE_KS4 | 128 | 450 GB | memory | 102–215 GB | ~45–48 | 215 GB on 10-min. Full recordings 337–396 GB → needs large node |
+| ANALYZE_SC2 | 128 | 450 GB | memory | 165–241 GB | ~48–50 | Already exceeds 230 GB on 10-min → needs large node |
+| ANALYZE_TDC2 | 128 | 200 GB | shared | 70–117 GB | ~43–50 | OK |
+| ANALYZE_LUPIN | 64 | 96 GB | shared | 15–37 GB | ~43–59 | OK |
+| ADV_CURATE | 4 | 16 GB | shared | 2–5 GB | ~1 | OK |
+| ADV_CURATE_LPN | 4 | 16 GB | shared | 4–11 GB | ~1 | OK |
+| COMPARE | 4 | 16 GB | shared | <1 GB | ~1 | OK |
+| COMPARE_CLEAN | 4 | 16 GB | shared | <1 GB | ~1 | OK |
+| CONSENSUS_DELTA | 2 | 4 GB | shared | <1 GB | ~1 | OK |
+| CURATE | 4 | 16 GB | shared | <1 GB | ~1 | OK |
+
+### Previous data (pfcv2 full recording, 999770, 107 min, 2 probes)
+
+| Process | Peak RSS | Actual cores |
+|---------|----------|-------------|
+| PREPROCESS | ~150 GB | ~87 |
+| SORT_SC2 | timed out | — |
+| SORT_TDC2 | ~80 GB | ~11 |
+| SORT_LUPIN | 98–110 GB | ~7 |
+| SORT_MS5 | 47–53 GB | ~35 |
+| ANALYZE_KS4 | 355–391 GB | ~12 |
+| ANALYZE_SC2 | 283–299 GB | ~12 |
+| ANALYZE_TDC2 | 131 GB | ~8 |
+| ANALYZE_MS5 | 26–37 GB | ~9 |
+| ANALYZE_LUPIN | 69–77 GB | ~23 |
 
 Notes:
-- SORT_SC2 on main (128 cores flat) is cheaper than shared (~259 equiv cores).
-- ANALYZE split per-sorter: KS4/SC2 → main (large nodes), TDC2/MS5 → shared.
+- ANALYZE_KS4/SC2 moved to `memory` partition (large nodes, 512 GB) — 450 GB requested.
+- SORT_SC2 and SORT_LUPIN: both on shared at 64 cpus / 200 GB. OMP template matching can stall → 10x time multiplier.
+- MS5 disabled — consistently fails on full-probe data.
 
 ## multishankv2 resource allocation (per-shank, ~96 ch NP2)
 
-Data from 1005256, 71-min recording, 4-shank NP2.
+### Current config vs measured (multishankv2, 1005256, 71-min full recording, 1 probe × 4 shanks)
 
-| Process | Peak RSS | +30% headroom | Actual cores | CPUs | Memory | Dominant | Equiv. charge | Partition |
-|---------|----------|--------------|-------------|------|--------|----------|--------------|-----------|
-| PREPROCESS | 149 GB | 194 GB | ~87 | 128 | 196 GB | mem (221) | 221 | shared |
-| SORT_KS4_BATCH | 13-16 GB | 21 GB | GPU | 288 | 480 GB | — | GPU alloc | gpugh |
-| SORT_SC2 | 65-116 GB | 151 GB | ~13 | 128 | 150 GB | mem (169) | 169 | shared |
-| SORT_MS5 | 9-30 GB | 39 GB | ~45 | 64 | 40 GB | cores (64) | 64 | shared |
-| SORT_TDC2 | 18-21 GB | 27 GB | ~11 | 16 | 28 GB | mem (32) | 32 | shared |
-| SORT_LUPIN | 52 GB | 68 GB | ~14 | 64 | 68 GB | mem (77) | 77 | shared |
-| ANALYZE_KS4 | 245-319 GB | 415 GB | ~30 | 128 | 230 GB | mem (259) | 259 | main |
-| ANALYZE_SC2 | 99-211 GB | 274 GB | ~37 | 128 | 230 GB | mem (259) | 259 | main |
-| ANALYZE_TDC2 | 17-26 GB | 34 GB | ~28 | 32 | 34 GB | mem (38) | 38 | shared |
-| ANALYZE_MS5 | 32-91 GB | 118 GB | ~39 | 64 | 118 GB | mem (133) | 133 | shared |
-| ANALYZE_LUPIN | 26 GB | 34 GB | ~39 | 48 | 34 GB | cores (48) | 48 | shared |
-| ADVANCED_CURATE | 1-5 GB | 7 GB | ~1 | 4 | 8 GB | mem (9) | 9 | shared |
-| ADV_CURATE_LPN | 6 GB | 8 GB | ~1 | 4 | 8 GB | mem (9) | 9 | shared |
-| COMPARE | 1 GB | 2 GB | ~1 | 4 | 16 GB | mem (18) | 18 | shared |
-| COMPARE_CLEAN | 0.4-0.6 GB | 1 GB | ~1 | 4 | 16 GB | mem (18) | 18 | shared |
-| CONSENSUS_DELTA | 85 MB | — | ~1 | 2 | 4 GB | mem (5) | 5 | shared |
-| CURATE | 46-49 MB | — | ~1 | 4 | 16 GB | mem (18) | 18 | shared |
+MS5 disabled. Data from trace 19297021.
+
+| Process | Req CPUs | Req Mem | Partition | Actual RSS | Actual CPUs | Comment |
+|---------|----------|---------|-----------|------------|-------------|---------|
+| PREPROCESS | 128 | 230 GB | main | 165 GB | ~106 | OK |
+| SORT_KS4_BATCH | 288 | 480 GB | gpugh | 56 GB | ~148 | OK |
+| SORT_SC2 | 64 | 200 GB | shared | 158–**195 GB** | ~3–8 | 12x time. 195 GB close to 200 limit. 2/4 shanks timed out at 8h16m (OMP stall) |
+| SORT_TDC2 | 16 | 28 GB | shared | 18–20 GB | ~9–10 | OK |
+| SORT_LUPIN | 64 | 200 GB | shared | **126 GB** | ~3 | 12x time. Only 1/4 shanks finished (barely). 3/4 timed out (OMP stall) |
+| ANALYZE_KS4 | 128 | 450 GB | memory | 243–317 GB | ~28–33 | 317 GB exceeds thin node → needs large node |
+| ANALYZE_SC2 | 128 | 450 GB | memory | 168–190 GB | ~37–39 | OK on per-shank but memory partition for safety headroom |
+| ANALYZE_TDC2 | 32 | 34 GB | shared | 17–20 GB | ~13–30 | OK |
+| ANALYZE_LUPIN | 48 | 34 GB | shared | 21 GB | ~18 | OK (only shank0 ran) |
+| ADV_CURATE | 4 | 8 GB | shared | 1–5 GB | ~1 | OK |
+| ADV_CURATE_LPN | 4 | 8 GB | shared | 5 GB | ~1 | OK |
+| COMPARE | 4 | 16 GB | shared | ~1 GB | ~1 | OK |
+| COMPARE_CLEAN | 4 | 16 GB | shared | <1 GB | ~1 | OK |
+| CONSENSUS_DELTA | 2 | 4 GB | shared | <1 GB | ~1 | OK |
+| CURATE | 4 | 16 GB | shared | <1 GB | ~1 | OK |
 
 Notes:
-- PREPROCESS (149 GB) fits on shared — saves whole-node allocation.
-- SORT_SC2 (116 GB) fits on shared — big saving vs main for 4 shanks.
-- ANALYZE_SC2 stays on main — 211 GB + 30% = 274 GB exceeds 227 GB shared limit.
-- Per-shank data is ~4x lighter than full-probe, so more processes fit on shared.
+- ANALYZE_KS4/SC2 moved to `memory` partition (large nodes, 512 GB) — 450 GB requested.
+- ANALYZE_SC2 currently OK on per-shank (190 GB) but memory partition for safety headroom.
+- SORT_SC2/LUPIN: OMP `find spikes` bottleneck causes single-threaded stalls on pathological chunks. More CPUs/memory won't help — it's algorithmic. Generous time limits (12x) are the only mitigation.
+- SC2 shank RSS (195 GB) is close to the 200 GB request. May need bump if it grows on other recordings.
 
 ## Measured peak RSS (pfcv2, full probe, 384 channels NP1, 107 min)
 

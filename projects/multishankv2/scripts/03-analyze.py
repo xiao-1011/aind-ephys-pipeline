@@ -4,6 +4,7 @@ import platform
 
 import spikeinterface.full as si
 import spikeinterface.extractors as se
+from spikeinterface.curation import remove_excess_spikes
 
 
 COMPUTE_EXTENSIONS = {
@@ -210,6 +211,9 @@ def main():
 
         print(f"\nProcessing: {sorter_folder.name}")
         sorting, recording = load_sorting_and_recording(sorter_folder, recording_folder)
+
+        # Remove spikes that exceed the recording duration (e.g. KS4 edge artifacts)
+        sorting = remove_excess_spikes(sorting, recording)
 
         print(f"  Building analyzer -> {analyzer_name}")
         build_analyzer(sorting, recording, analyzer_folder)

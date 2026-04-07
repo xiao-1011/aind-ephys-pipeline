@@ -212,6 +212,9 @@ def main():
     )
     qm_filtered = qm.query(curation_query)
     units_passing = list(qm_filtered.index)
+    # Filter to IDs still present after redundancy removal + noise removal + merge
+    valid_ids = set(analyzer.sorting.unit_ids)
+    units_passing = [u for u in units_passing if u in valid_ids]
     passing_qc = np.zeros(len(analyzer.unit_ids), dtype=bool)
     passing_qc[analyzer.sorting.ids_to_indices(units_passing)] = True
     print(f"\n--- QM passing_qc ---")
