@@ -27,13 +27,28 @@ Source: https://support.pdc.kth.se/doc/run_jobs/job_scheduling/
 
 ### Shared partition: proportional billing
 
-On shared (thin nodes: 256 logical cores, 256 GB), cores and memory are
+On shared (thin nodes: 256 logical cores, ~227 GB available), cores and memory are
 proportionally linked. **Whichever request is larger determines billing**:
 - 20 cores → ~17 GB RAM
 - 80 GB memory → ~94 cores charged
 
 So requesting 120 GB memory on shared charges ~120/227 × 256 ≈ 135 logical
 cores (68 physical core-hours per node-hour), even if you only request 32 cpus.
+
+**On shared, you pay `max(cpus, memory × 256/227)`. So anything above ~113 GB
+on shared costs more than a whole main node (128 cores).** A main thin node
+costs 128 cores flat. On shared, 113/227 × 256 ≈ 128 cores — the break-even point.
+
+Example from `squeue` showing SLURM allocating 231 CPUs for a 64 CPU / 200 GB request on shared:
+
+```
+       JOBID  PARTITION                 NAME ST       TIME TIME_LIMIT  NODES   CPUS MIN_MEMORY
+    19324044     shared nf-SORT_SC2_(2026-04 PD       0:00   14:12:00      1    231       200G
+    19324045     shared nf-SORT_LUPIN_(2026- PD       0:00   14:12:00      1    231       200G
+```
+
+We asked for 64 CPUs but SLURM allocated 231 because 200 GB / 227 GB × 256 ≈ 226 cores.
+This is more expensive than a main node (128 cores). Moved SC2/Lupin to main.
 
 ### Key correction
 
@@ -56,7 +71,7 @@ We use the full ~227 GB range for shared.
 
 For multishank with 4 shanks, the downstream processes fan out per-shank, so each shank gets its own node. That's 4 nodes x N processes, each charged at 128 core-hours per node-hour.
 
-A second benefit of `shared`: **generous time limits cost nothing extra**. On `main`, a 5-hour time limit means reserving (and paying for) a full node for 5 hours even if the job finishes in 30 minutes. On `shared`, you only pay for actual runtime. This lets us give slow sorters (Lupin, SC2) much larger time limits without wasting allocation, solving timeout issues.
+A second benefit of `shared`: **generous time limits cost nothing extra**. On `main`, a 5-hour time limit means reserving (and paying for) a full node for 5 hours even if the job finishes in 30 minutes. On `shared`, you only pay for actual runtime. However, this benefit only matters for low-memory processes — **any process needing >113 GB is cheaper on main** (see proportional billing above).
 
 ## How we measured actual resource usage
 
@@ -101,12 +116,12 @@ MS5 disabled. Data from trace 19286467. Full recordings (~107 min) NOT yet measu
 |---------|----------|---------|-----------|------------|-------------|---------|
 | PREPROCESS | 128 | 230 GB | main | 169–186 GB | ~47–59 | OK. Streaming/chunked, similar on full recordings |
 | SORT_KS4_BATCH | 288 | 480 GB | gpugh | 26 GB | ~73 | OK. GPU node, 4 probes batched |
-| SORT_SC2 | 64 | 200 GB | shared | 87–129 GB | ~16–18 | 10x time. Unknown on full recordings — could exceed 200 GB |
-| SORT_TDC2 | 128 | 110 GB | shared | 34–44 GB | ~10–13 | Overprovisioned on CPU, could reduce to 64 |
-| SORT_LUPIN | 64 | 200 GB | shared | 64–91 GB | ~11–14 | 10x time. Unknown on full recordings |
+| SORT_SC2 | 128 | 230 GB | main | 87–129 GB | ~16–18 | 10x time. Main cheaper than shared at >113 GB |
+| SORT_TDC2 | 128 | 110 GB | shared | 34–44 GB | ~10–13 | ~124 equiv cores on shared ≈ main. Borderline |
+| SORT_LUPIN | 128 | 230 GB | main | 64–91 GB | ~11–14 | 10x time. Main cheaper than shared at >113 GB |
 | ANALYZE_KS4 | 128 | 450 GB | memory | 102–215 GB | ~45–48 | 215 GB on 10-min. Full recordings 337–396 GB → needs large node |
 | ANALYZE_SC2 | 128 | 450 GB | memory | 165–241 GB | ~48–50 | Already exceeds 230 GB on 10-min → needs large node |
-| ANALYZE_TDC2 | 128 | 200 GB | shared | 70–117 GB | ~43–50 | OK |
+| ANALYZE_TDC2 | 128 | 230 GB | main | 70–117 GB | ~43–50 | 200 GB on shared = 226 equiv cores > 128 (main) |
 | ANALYZE_LUPIN | 64 | 96 GB | shared | 15–37 GB | ~43–59 | OK |
 | ADV_CURATE | 4 | 16 GB | shared | 2–5 GB | ~1 | OK |
 | ADV_CURATE_LPN | 4 | 16 GB | shared | 4–11 GB | ~1 | OK |
@@ -131,8 +146,9 @@ MS5 disabled. Data from trace 19286467. Full recordings (~107 min) NOT yet measu
 | ANALYZE_LUPIN | 69–77 GB | ~23 |
 
 Notes:
-- ANALYZE_KS4/SC2 moved to `memory` partition (large nodes, 512 GB) — 450 GB requested.
-- SORT_SC2 and SORT_LUPIN: both on shared at 64 cpus / 200 GB. OMP template matching can stall → 10x time multiplier.
+- ANALYZE_KS4/SC2 on `memory` partition (large nodes, 512 GB) — 450 GB requested.
+- SORT_SC2/LUPIN/ANALYZE_TDC2 moved to main — >113 GB on shared costs more than a whole main node.
+- OMP template matching can stall → 10x time multiplier for SC2/Lupin.
 - MS5 disabled — consistently fails on full-probe data.
 
 ## multishankv2 resource allocation (per-shank, ~96 ch NP2)
@@ -145,9 +161,9 @@ MS5 disabled. Data from trace 19297021.
 |---------|----------|---------|-----------|------------|-------------|---------|
 | PREPROCESS | 128 | 230 GB | main | 165 GB | ~106 | OK |
 | SORT_KS4_BATCH | 288 | 480 GB | gpugh | 56 GB | ~148 | OK |
-| SORT_SC2 | 64 | 200 GB | shared | 158–**195 GB** | ~3–8 | 12x time. 195 GB close to 200 limit. 2/4 shanks timed out at 8h16m (OMP stall) |
-| SORT_TDC2 | 16 | 28 GB | shared | 18–20 GB | ~9–10 | OK |
-| SORT_LUPIN | 64 | 200 GB | shared | **126 GB** | ~3 | 12x time. Only 1/4 shanks finished (barely). 3/4 timed out (OMP stall) |
+| SORT_SC2 | 128 | 230 GB | main | 158–195 GB | ~3–8 | 12x time. Main cheaper than shared at >113 GB |
+| SORT_TDC2 | 16 | 28 GB | shared | 18–20 GB | ~9–10 | OK. ~32 equiv cores on shared |
+| SORT_LUPIN | 128 | 230 GB | main | 126 GB | ~3 | 12x time. Main cheaper than shared at >113 GB |
 | ANALYZE_KS4 | 128 | 450 GB | memory | 243–317 GB | ~28–33 | 317 GB exceeds thin node → needs large node |
 | ANALYZE_SC2 | 128 | 450 GB | memory | 168–190 GB | ~37–39 | OK on per-shank but memory partition for safety headroom |
 | ANALYZE_TDC2 | 32 | 34 GB | shared | 17–20 GB | ~13–30 | OK |
@@ -160,10 +176,10 @@ MS5 disabled. Data from trace 19297021.
 | CURATE | 4 | 16 GB | shared | <1 GB | ~1 | OK |
 
 Notes:
-- ANALYZE_KS4/SC2 moved to `memory` partition (large nodes, 512 GB) — 450 GB requested.
-- ANALYZE_SC2 currently OK on per-shank (190 GB) but memory partition for safety headroom.
-- SORT_SC2/LUPIN: OMP `find spikes` bottleneck causes single-threaded stalls on pathological chunks. More CPUs/memory won't help — it's algorithmic. Generous time limits (12x) are the only mitigation.
-- SC2 shank RSS (195 GB) is close to the 200 GB request. May need bump if it grows on other recordings.
+- ANALYZE_KS4/SC2 on `memory` partition (large nodes, 512 GB) — 450 GB requested.
+- SORT_SC2/LUPIN moved to main — >113 GB on shared costs more than a whole main node.
+- OMP `find spikes` bottleneck causes single-threaded stalls. Generous time limits (12x) are the only mitigation.
+- SC2 shank RSS (195 GB) fits within main (230 GB).
 
 ## Measured peak RSS (pfcv2, full probe, 384 channels NP1, 107 min)
 
