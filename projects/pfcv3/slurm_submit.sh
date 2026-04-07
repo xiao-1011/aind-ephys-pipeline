@@ -112,6 +112,10 @@ else
     echo "HuggingFace UnitRefine models already cached."
 fi
 
+# Force offline mode for compute nodes — models are pre-cached above.
+# Prevents HuggingFace API rate limiting (429) when multiple tasks run in parallel.
+export HF_HUB_OFFLINE=1
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Print run info
 # ─────────────────────────────────────────────────────────────────────────────
