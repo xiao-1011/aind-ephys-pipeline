@@ -28,7 +28,7 @@ date
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Parent directory of your session folder(s).
-export DATA_PATH="/cfs/klemming/projects/supr/dmclab/Joana/Raw_data/986169"
+export DATA_PATH="/cfs/klemming/projects/supr/dmclab/Joana/ephys_batch2"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Shared infrastructure — rarely needs editing
@@ -37,7 +37,7 @@ export DATA_PATH="/cfs/klemming/projects/supr/dmclab/Joana/Raw_data/986169"
 PIPELINE_PATH="/cfs/klemming/projects/supr/dmclab/aind-ephys-pipeline-pfc"
 
 # Output base for this project (separate from pfc v1)
-OUTPUT_BASE="/cfs/klemming/projects/supr/dmclab/ephys-pipeline-output/pfcv3"
+OUTPUT_BASE="/cfs/klemming/projects/supr/dmclab/ephys-pipeline-output/pfcv3-batch2"
 export RESULTS_PATH="${OUTPUT_BASE}/results"
 WORKDIR="${OUTPUT_BASE}/work"
 LOGDIR="${OUTPUT_BASE}/logs"
