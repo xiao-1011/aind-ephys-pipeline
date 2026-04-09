@@ -19,7 +19,6 @@ COMPUTE_EXTENSIONS = {
     "unit_locations": {},
     "template_similarity": {"method": "l1"},
     "quality_metrics": {},
-    "principal_components": {},
 }
 
 # Files that are characteristic of a raw Kilosort output folder

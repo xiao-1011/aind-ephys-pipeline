@@ -19,6 +19,8 @@ import argparse
 import json
 import platform
 
+import os
+
 import numpy as np
 import pandas as pd
 
@@ -32,6 +34,27 @@ from spikeinterface.curation import validate_curation_dict
 def _int(uid):
     """Convert numpy integers to plain Python int for JSON serialisation."""
     return int(uid) if isinstance(uid, np.integer) else uid
+
+
+def _resolve_hf_model_path(repo_id):
+    """Resolve a HuggingFace repo_id to its local cache snapshot path.
+
+    Works fully offline — just reads the filesystem, no HF API calls.
+    Models must have been pre-cached via ``snapshot_download(repo_id)``
+    before calling this function (done in slurm_submit.sh).
+    """
+    hf_home = os.environ.get("HF_HOME", os.path.join(os.path.expanduser("~"), ".cache", "huggingface"))
+    model_dir_name = "models--" + repo_id.replace("/", "--")
+    snapshots_dir = os.path.join(hf_home, "hub", model_dir_name, "snapshots")
+    if not os.path.isdir(snapshots_dir):
+        raise FileNotFoundError(
+            f"Model not found in HF cache: {snapshots_dir}\n"
+            f"Run snapshot_download('{repo_id}') first (done in slurm_submit.sh)."
+        )
+    hashes = sorted(os.listdir(snapshots_dir))
+    if not hashes:
+        raise FileNotFoundError(f"No snapshots found in: {snapshots_dir}")
+    return os.path.join(snapshots_dir, hashes[-1])
 
 
 def _apply_merges_and_remove(sorting, merge_groups, remove_ids):
@@ -138,9 +161,10 @@ def main():
 
     # 1b. UnitRefine noise/neural classifier
     print("\n--- UnitRefine noise/neural classifier ---")
+    _noise_repo = "SpikeInterface/UnitRefine_noise_neural_classifier_lightweight"
     noise_neuron_labels = sc.model_based_label_units(
         sorting_analyzer=analyzer,
-        repo_id="SpikeInterface/UnitRefine_noise_neural_classifier_lightweight",
+        model_folder=_resolve_hf_model_path(_noise_repo),
         trust_model=True,
     )
     noise_units = noise_neuron_labels[noise_neuron_labels["prediction"] == "noise"]
@@ -179,9 +203,10 @@ def main():
 
     # 2a. UnitRefine SUA/MUA classifier (on neural units only)
     print("\n--- UnitRefine SUA/MUA classifier ---")
+    _sua_repo = "SpikeInterface/UnitRefine_sua_mua_classifier_lightweight"
     sua_mua_labels = sc.model_based_label_units(
         sorting_analyzer=analyzer_neural,
-        repo_id="SpikeInterface/UnitRefine_sua_mua_classifier_lightweight",
+        model_folder=_resolve_hf_model_path(_sua_repo),
         trust_model=True,
     )
     # Merge with noise labels for a complete per-unit table
