@@ -145,7 +145,10 @@ $NF_BIN \
     -with-report   "${LOGDIR}/${SLURM_JOB_ID}_report.html" \
     -with-trace    "${LOGDIR}/${SLURM_JOB_ID}_trace.txt" \
     -with-timeline "${LOGDIR}/${SLURM_JOB_ID}_timeline.html" \
-    -resume
+    -resume \
+    --run_ks4 false \
+    --run_tdc2 false \
+    --run_lupin false
 
 echo "Job finished"
 date

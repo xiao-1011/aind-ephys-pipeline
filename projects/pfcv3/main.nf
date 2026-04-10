@@ -483,85 +483,109 @@ workflow {
     preprocess_out = PREPROCESS(probes_ch)
 
     // ── KS4: batch up to 4 probes onto 1 GPU node (4 GPUs) ──────────────
-    // buffer collects 4 preprocessed probes eagerly, then fires one GPU job.
-    // remainder:true ensures the last batch (<4 probes) still runs.
-    ks4_batch_ch = preprocess_out.preprocessed
-        .buffer(size: 4, remainder: true)
-        .map { batch ->
-            def sids   = batch.collect { it[0] }
-            def probes = batch.collect { it[1] }
-            def durs   = batch.collect { it[2] }
-            def dirs   = batch.collect { it[3] }
-            tuple(sids, probes, durs, dirs)
-        }
-
-    sort_ks4_batch_out = SORT_KS4_BATCH(ks4_batch_ch)
-
-    // Fan back to per-probe tuples for downstream compatibility
-    sort_ks4_individual = sort_ks4_batch_out.sorters
-        .flatMap { sids, probes, durs, sorter_dirs ->
-            def dir_list = (sorter_dirs instanceof List) ? sorter_dirs : [sorter_dirs]
-            dir_list.collect { dir ->
-                def idx = dir.parent.name.replace('probe_', '').toInteger()
-                tuple(sids[idx], probes[idx], durs[idx], dir)
+    // Deterministic batch assignments: sort probes alphabetically and assign
+    // batch index = floor(i / 4).  Computed at discovery time (instant
+    // filesystem scan) so the mapping is fixed before any SLURM scheduling.
+    // groupTuple(by: batch_idx) fires each batch independently — no stall.
+    if (params.run_ks4) {
+        ks4_batch_map = discoverProbes()
+            .toSortedList { a, b -> "${a[0]}/${a[1]}" <=> "${b[0]}/${b[1]}" }
+            .flatMap { sorted ->
+                sorted.withIndex().collect { item, idx ->
+                    tuple("${item[0]}/${item[1]}", (int)(idx / 4))
+                }
             }
-        }
+
+        ks4_batch_ch = preprocess_out.preprocessed
+            .map { sid, probe, dur, dir -> tuple("${sid}/${probe}", sid, probe, dur, dir) }
+            .combine(ks4_batch_map, by: 0)
+            .map { key, sid, probe, dur, dir, batch_idx -> tuple(batch_idx, sid, probe, dur, dir) }
+            .groupTuple(by: 0)
+            .map { batch_idx, sids, probes, durs, dirs ->
+                tuple(sids, probes, durs, dirs)
+            }
+
+        sort_ks4_batch_out = SORT_KS4_BATCH(ks4_batch_ch)
+
+        sort_ks4_individual = sort_ks4_batch_out.sorters
+            .flatMap { sids, probes, durs, sorter_dirs ->
+                def dir_list = (sorter_dirs instanceof List) ? sorter_dirs : [sorter_dirs]
+                dir_list.collect { dir ->
+                    def idx = dir.parent.name.replace('probe_', '').toInteger()
+                    tuple(sids[idx], probes[idx], durs[idx], dir)
+                }
+            }
+    } else {
+        sort_ks4_individual = Channel.empty()
+    }
 
     // CPU sorters run immediately per-probe (no batching, no waiting)
-    sort_sc2_out   = SORT_SC2(preprocess_out.preprocessed)
-    // sort_ms5_out   = SORT_MS5(preprocess_out.preprocessed)  // MS5 disabled
-    sort_tdc2_out  = SORT_TDC2(preprocess_out.preprocessed)
-    sort_lupin_out = SORT_LUPIN(preprocess_out.preprocessed)
+    sort_sc2_out   = params.run_sc2   ? SORT_SC2(preprocess_out.preprocessed)   : null
+    sort_tdc2_out  = params.run_tdc2  ? SORT_TDC2(preprocess_out.preprocessed)  : null
+    sort_lupin_out = params.run_lupin ? SORT_LUPIN(preprocess_out.preprocessed) : null
+
+    // ── Per-sorter channels (empty when toggled off) ────────────────────
+    ks4_sorter_ch   = sort_ks4_individual
+    sc2_sorter_ch   = params.run_sc2   ? sort_sc2_out.sorter   : Channel.empty()
+    tdc2_sorter_ch  = params.run_tdc2  ? sort_tdc2_out.sorter  : Channel.empty()
+    lupin_sorter_ch = params.run_lupin ? sort_lupin_out.sorter : Channel.empty()
 
     // ── COMPARE (raw): all sorter_* folders grouped ─────────────────────
-    // Waits for KS4 batch to complete for each probe before firing.
-    all_sorters = sort_ks4_individual
-        .mix(sort_sc2_out.sorter, sort_tdc2_out.sorter, sort_lupin_out.sorter)
+    all_sorters = ks4_sorter_ch
+        .mix(sc2_sorter_ch, tdc2_sorter_ch, lupin_sorter_ch)
         .groupTuple(by: [0, 1, 2])
 
     compare_out = COMPARE(all_sorters)
 
     // ── ANALYZE: per-sorter processes with different resource allocations ─
-    // KS4/SC2 → main (large nodes, up to 396 GB RSS)
-    // TDC2/MS5 → shared (155 GB / 51 GB RSS)
-    // Lupin → shared (separate container)
-    analyze_ks4_in = preprocess_out.preprocessed
-        .combine(sort_ks4_individual, by: [0, 1, 2])
-    analyze_ks4_out = ANALYZE_KS4(analyze_ks4_in)
+    if (params.run_ks4) {
+        analyze_ks4_in = preprocess_out.preprocessed
+            .combine(sort_ks4_individual, by: [0, 1, 2])
+        analyze_ks4_out = ANALYZE_KS4(analyze_ks4_in)
+    }
+    ks4_analyzer_ch = params.run_ks4 ? analyze_ks4_out.analyzer : Channel.empty()
 
-    analyze_sc2_in = preprocess_out.preprocessed
-        .combine(sort_sc2_out.sorter, by: [0, 1, 2])
-    analyze_sc2_out = ANALYZE_SC2(analyze_sc2_in)
+    if (params.run_sc2) {
+        analyze_sc2_in = preprocess_out.preprocessed
+            .combine(sort_sc2_out.sorter, by: [0, 1, 2])
+        analyze_sc2_out = ANALYZE_SC2(analyze_sc2_in)
+    }
+    sc2_analyzer_ch = params.run_sc2 ? analyze_sc2_out.analyzer : Channel.empty()
 
-    analyze_tdc2_in = preprocess_out.preprocessed
-        .combine(sort_tdc2_out.sorter, by: [0, 1, 2])
-    analyze_tdc2_out = ANALYZE_TDC2(analyze_tdc2_in)
+    if (params.run_tdc2) {
+        analyze_tdc2_in = preprocess_out.preprocessed
+            .combine(sort_tdc2_out.sorter, by: [0, 1, 2])
+        analyze_tdc2_out = ANALYZE_TDC2(analyze_tdc2_in)
+    }
+    tdc2_analyzer_ch = params.run_tdc2 ? analyze_tdc2_out.analyzer : Channel.empty()
 
-    // analyze_ms5_in = preprocess_out.preprocessed          // MS5 disabled
-    //     .combine(sort_ms5_out.sorter, by: [0, 1, 2])
-    // analyze_ms5_out = ANALYZE_MS5(analyze_ms5_in)
-
-    analyze_lupin_in = preprocess_out.preprocessed
-        .combine(sort_lupin_out.sorter, by: [0, 1, 2])
-    analyze_lupin_out = ANALYZE_LUPIN(analyze_lupin_in)
-
-    // Mix all non-Lupin analyzer outputs for ADVANCED_CURATE
-    all_analyze_non_lupin = analyze_ks4_out.analyzer
-        .mix(analyze_sc2_out.analyzer, analyze_tdc2_out.analyzer)
+    if (params.run_lupin) {
+        analyze_lupin_in = preprocess_out.preprocessed
+            .combine(sort_lupin_out.sorter, by: [0, 1, 2])
+        analyze_lupin_out = ANALYZE_LUPIN(analyze_lupin_in)
+    }
+    lupin_analyzer_ch = params.run_lupin ? analyze_lupin_out.analyzer : Channel.empty()
 
     // ── ADVANCED_CURATE: per-sorter (parallel) ──────────────────────────
     // Produces clean sortings (noise removed + merged) + label JSONs.
+    all_analyze_non_lupin = ks4_analyzer_ch
+        .mix(sc2_analyzer_ch, tdc2_analyzer_ch)
+
     adv_curate_in = preprocess_out.preprocessed
         .combine(all_analyze_non_lupin, by: [0, 1, 2])
     adv_curate_out = ADVANCED_CURATE(adv_curate_in)
 
-    adv_curate_lupin_in = preprocess_out.preprocessed
-        .combine(analyze_lupin_out.analyzer, by: [0, 1, 2])
-    adv_curate_lupin_out = ADV_CURATE_LPN(adv_curate_lupin_in)
+    if (params.run_lupin) {
+        adv_curate_lupin_in = preprocess_out.preprocessed
+            .combine(lupin_analyzer_ch, by: [0, 1, 2])
+        adv_curate_lupin_out = ADV_CURATE_LPN(adv_curate_lupin_in)
+    }
+    lupin_clean_ch     = params.run_lupin ? adv_curate_lupin_out.clean_sorting : Channel.empty()
+    lupin_adv_labels_ch = params.run_lupin ? adv_curate_lupin_out.adv_labels   : Channel.empty()
 
     // ── COMPARE_CLEAN: all sorting_clean_* folders grouped ──────────────
     all_clean = adv_curate_out.clean_sorting
-        .mix(adv_curate_lupin_out.clean_sorting)
+        .mix(lupin_clean_ch)
         .groupTuple(by: [0, 1, 2])
     compare_clean_out = COMPARE_CLEAN(all_clean)
 
@@ -571,13 +595,12 @@ workflow {
     CONSENSUS_DELTA(delta_in)
 
     // ── CURATE: merges all labels + both consensuses ────────────────────
-    all_analyzers = analyze_ks4_out.analyzer
-        .mix(analyze_sc2_out.analyzer, analyze_tdc2_out.analyzer,
-             analyze_lupin_out.analyzer)
+    all_analyzers = ks4_analyzer_ch
+        .mix(sc2_analyzer_ch, tdc2_analyzer_ch, lupin_analyzer_ch)
         .groupTuple(by: [0, 1, 2])
 
     all_adv_labels = adv_curate_out.adv_labels
-        .mix(adv_curate_lupin_out.adv_labels)
+        .mix(lupin_adv_labels_ch)
         .groupTuple(by: [0, 1, 2])
 
     curate_in = all_analyzers
