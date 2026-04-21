@@ -114,7 +114,7 @@
             "method": "monopolar_triangulation"
         },
         "spike_locations": {
-            "method": "grid_convolution"
+            "method": "monopolar_triangulation"
         },
         "template_metrics": {
             "upsampling_factor": 10,
