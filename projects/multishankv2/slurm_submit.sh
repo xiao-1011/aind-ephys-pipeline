@@ -31,7 +31,7 @@ date
 # ---------------------------------------------------------------------------
 
 # Parent directory of your session folder(s).
-export DATA_PATH="/cfs/klemming/projects/supr/dmclab/Anil/batch2"
+export DATA_PATH="/cfs/klemming/projects/supr/dmclab/Anil/batch4"
 
 # ---------------------------------------------------------------------------
 # Shared infrastructure — rarely needs editing
@@ -40,7 +40,7 @@ export DATA_PATH="/cfs/klemming/projects/supr/dmclab/Anil/batch2"
 PIPELINE_PATH="/cfs/klemming/projects/supr/dmclab/aind-ephys-pipeline-pfc"
 
 # Output base for this project
-OUTPUT_BASE="/cfs/klemming/projects/supr/dmclab/ephys-pipeline-output/multishankv2-batch2"
+OUTPUT_BASE="/cfs/klemming/projects/supr/dmclab/ephys-pipeline-output/multishankv2-batch4"
 export RESULTS_PATH="${OUTPUT_BASE}/results"
 WORKDIR="${OUTPUT_BASE}/work"
 LOGDIR="${OUTPUT_BASE}/logs"
@@ -148,6 +148,7 @@ $NF_BIN \
     -with-report   "${LOGDIR}/${SLURM_JOB_ID}_report.html" \
     -with-trace    "${LOGDIR}/${SLURM_JOB_ID}_trace.txt" \
     -with-timeline "${LOGDIR}/${SLURM_JOB_ID}_timeline.html" \
+    --run_sc2 false \
     --run_lupin false
 
 echo "Job finished"
