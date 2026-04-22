@@ -28,8 +28,10 @@ DEFAULT_RESULTS = "/cfs/klemming/projects/supr/dmclab/ephys-pipeline-output/pfcv
 DEFAULT_LOGS    = "/cfs/klemming/projects/supr/dmclab/ephys-pipeline-output/pfcv3-batch2/logs"
 
 # Sorter outputs (dir name → short label)
+# Note: pfcv3 KS4 does not publish sorter_kilosort4 to results/ —
+# the raw sorter dir is consumed internally. Use analyzer_kilosort4
+# as the indicator that KS4 ran successfully.
 SORTERS = {
-    "sorter_kilosort4":      "KS4-sort",
     "sorter_spykingcircus2": "SC2-sort",
     "sorter_tridesclous2":   "TDC2-sort",
     "sorter_lupin":          "LPN-sort",
@@ -54,7 +56,6 @@ CURATIONS = {
 # Disk output → (trace process name, tag)
 # Tag for pfcv3 is always "session/probe" (no shank level)
 OUTPUT_TO_TRACE = {
-    "sorter_kilosort4":      ("SORT_KS4_BATCH",  lambda s, p: f"{s}/{p}"),
     "sorter_spykingcircus2": ("SORT_SC2",         lambda s, p: f"{s}/{p}"),
     "sorter_tridesclous2":   ("SORT_TDC2",        lambda s, p: f"{s}/{p}"),
     "sorter_lupin":          ("SORT_LUPIN",        lambda s, p: f"{s}/{p}"),
