@@ -72,8 +72,16 @@ process PREPROCESS {
 process SORT_KS4_BATCH {
     tag "batch[${sids.join(',')}]"
 
-    // No publishDir — sorter output published indirectly via ANALYZE downstream.
-    // Avoids complex per-probe publish logic in a batched process.
+    // Publish each probe's sorter_kilosort4 to its own results directory.
+    // saveAs maps probe_N/sorter_kilosort4 → results/{sid}/{probe}/sorter_kilosort4
+    publishDir params.results_path, mode: params.publish_mode, overwrite: true,
+        saveAs: { filename ->
+            def m = filename =~ /^probe_(\d+)\/sorter_kilosort4/
+            if (m) {
+                def idx = m[0][1].toInteger()
+                "${sids[idx]}/${probes[idx]}/sorter_kilosort4"
+            } else { null }
+        }
 
     input:
     tuple val(sids), val(probes), val(durs), path(preproc_dirs, stageAs: 'preproc_?')
