@@ -60,9 +60,13 @@ def preprocess_shank(recording, shank_label, working_folder, filter_type,
 
     # 5. Highpass spatial filter with AGC (optional)
     if use_spatial_filter:
+        n_channel_pad = min(60, rec.get_num_channels() - 1)
+        if n_channel_pad < 60:
+            print(f"  [{shank_label}] WARNING: only {rec.get_num_channels()} channels left, "
+                  f"reducing n_channel_pad from 60 to {n_channel_pad}")
         rec = spre.highpass_spatial_filter(
             rec,
-            n_channel_pad=60,
+            n_channel_pad=n_channel_pad,
             n_channel_taper=None,
             direction='y',
             apply_agc=True,
