@@ -1,46 +1,74 @@
 #!/usr/bin/env bash
-# multishankv2 status — what's in /mnt/dmclab/Anil/DATA_NPX, what's been
-# sorted locally, what's been pushed to the KI results dir, with shank-level
-# completeness. Re-runnable any time.
+# multishankv2 master status — what's where, across raw + local + KI + Dardel.
+#
+# Scans:
+#   - /mnt/dmclab/Anil/DATA_NPX/        (raw, KI NAS)
+#   - /media/data/ephys-pipeline-output/ (local workstation, multishankv2-local)
+#   - /mnt/dmclab/Anil/ephys-pipeline-output/<batch>/results/ (KI processed)
+#   - dardel:/cfs/.../ephys-pipeline-output/multishankv2*/results/ (Dardel)
+#
+# Output: per-session row with shank-level completeness in each location.
+# Re-runnable any time.
 #
 # Usage:
-#   bash multishankv2_status.sh               # write markdown to default path
-#   bash multishankv2_status.sh /tmp/foo.md   # custom output path
-#   bash multishankv2_status.sh -             # stdout
+#   bash multishankv2_status.sh                  # write markdown to default
+#   bash multishankv2_status.sh /tmp/foo.md      # custom path
+#   bash multishankv2_status.sh -                # stdout
 
 set -euo pipefail
 
 RAW_BASE="/mnt/dmclab/Anil/DATA_NPX"
 LOCAL_RESULTS="/media/data/ephys-pipeline-output"
 KI_RESULTS_BASE="/mnt/dmclab/Anil/ephys-pipeline-output"
-DEFAULT_OUT="${RAW_BASE}/multishankv2_status.md"
+DARDEL_RESULTS_BASE="/cfs/klemming/projects/supr/dmclab/ephys-pipeline-output"
+DEFAULT_OUT="${RAW_BASE}/MASTER_STATUS.md"
 
 OUT="${1:-${DEFAULT_OUT}}"
 
-# Discover all sessions: any dir containing a `*_imec*` subdir with an .ap.meta
-# Search depth covers DATA_NPX/<session>/<imec>/ and DATA_NPX/batchN/<session>/<imec>/
+echo "[scan] raw recordings ..." >&2
 mapfile -t METAS < <(find "${RAW_BASE}" -maxdepth 5 -name "*.ap.meta" 2>/dev/null | sort)
 
-# Helper: count published adv_curate files for a session under a given results root.
-# Expected layout: <root>/<sid>/results/<sid>/<sid>_imec0/shank{0..3}/advanced_curation_kilosort4.json
-# OR:             <root>/<sid>/<sid>_imec0/shank{0..3}/advanced_curation_kilosort4.json
-count_adv_curate_local() {
+# Pull Dardel processed-sessions list with shank-level adv_curate count in one ssh round-trip.
+# Output format per line: <sid> <batch> <shank_count>
+echo "[scan] dardel multishankv2 batches ..." >&2
+DARDEL_DATA=$(ssh dardel "
+for b in ${DARDEL_RESULTS_BASE}/multishankv2*/results; do
+    [ -d \$b ] || continue
+    bname=\$(basename \$(dirname \$b))
+    for s in \$b/*/; do
+        sid=\$(basename \$s)
+        [ \"\$sid\" = nextflow ] && continue
+        for imec in \$s/\${sid}_imec*; do
+            [ -d \$imec ] || continue
+            count=\$(ls \$imec/shank*/advanced_curation_kilosort4.json 2>/dev/null | wc -l)
+            echo \"\$sid \$bname \$count\"
+        done
+    done
+done
+" 2>/dev/null)
+
+declare -A DARDEL_COUNT DARDEL_BATCH
+while read -r sid batch count; do
+    [ -z "${sid:-}" ] && continue
+    DARDEL_COUNT[$sid]=$count
+    DARDEL_BATCH[$sid]=$batch
+done <<< "$DARDEL_DATA"
+
+count_local() {
     local sid=$1
     local imec0="${LOCAL_RESULTS}/${sid}/results/${sid}/${sid}_imec0"
     [ -d "${imec0}" ] || { echo 0; return; }
     ls "${imec0}"/shank*/advanced_curation_kilosort4.json 2>/dev/null | wc -l
 }
-count_adv_curate_ki() {
+count_ki() {
     local sid=$1
-    # Scan all batch dirs on KI for this session
-    local count=0
     for batch in "${KI_RESULTS_BASE}"/*/results/"${sid}"; do
         [ -d "${batch}" ] || continue
         local imec0="${batch}/${sid}_imec0"
         [ -d "${imec0}" ] || continue
-        count=$(ls "${imec0}"/shank*/advanced_curation_kilosort4.json 2>/dev/null | wc -l)
-        if [ "${count}" -gt 0 ]; then
-            echo "${count}"
+        local c=$(ls "${imec0}"/shank*/advanced_curation_kilosort4.json 2>/dev/null | wc -l)
+        if [ "${c}" -gt 0 ]; then
+            echo "${c}"
             return
         fi
     done
@@ -56,37 +84,42 @@ ki_batch_for() {
     echo ""
 }
 
-# Emit
+render_mark() {
+    # 0 -> ✗   N -> N/4   4 -> ✓
+    case "$1" in
+        0) echo "✗" ;;
+        4) echo "✓" ;;
+        "") echo "—" ;;
+        *) echo "$1/4" ;;
+    esac
+}
+
+OUT_TMP="/tmp/_msv2_status.$$"
 {
-    echo "# multishankv2-local processing status"
+    echo "# multishankv2 master status"
     echo
-    echo "_Generated $(date '+%Y-%m-%d %H:%M') from local + KI server state._"
+    echo "_Generated $(date '+%Y-%m-%d %H:%M') from raw (KI) + local + KI processed + Dardel state._"
     echo
-    echo "| Session | Raw size | Duration | Local | KI server | Batch | Notes |"
-    echo "|---|---:|---:|:---:|:---:|---|---|"
+    echo "| Session | Raw size | Dur | Local | KI | Dardel | KI batch | Dardel batch | Notes |"
+    echo "|---|---:|---:|:---:|:---:|:---:|---|---|---|"
 
-    total=0; full_local=0; full_ki=0; partial=0; pending=0
+    total=0; done_anywhere=0; only_dardel=0; partial=0; pending=0; skipped=0
     for meta in "${METAS[@]}"; do
-        # Derive session id from the imec dir name (more robust than walking
-        # up the path, which fails on nested layouts like .../recording/<imec>/)
         imec_dir=$(dirname "${meta}")
-        imec_base=$(basename "${imec_dir}")            # e.g. 2026-05-20_1005255_reaching_g0_imec0
-        sid="${imec_base%_imec*}"                       # strips trailing _imec[0-9]
-
-        # Skip if sid doesn't match the expected session pattern (date_animal_..._gN)
+        imec_base=$(basename "${imec_dir}")
+        sid="${imec_base%_imec*}"
         case "${sid}" in
             ????-??-??_*_g[0-9]*) ;;
             *) continue ;;
         esac
 
-        # Skip obvious non-real recordings (very small or empty meta)
         meta_size=$(stat -c %s "${meta}" 2>/dev/null || echo 0)
         if [ "${meta_size}" -lt 1000 ]; then
-            continue   # 0-byte / aborted meta
+            skipped=$((skipped+1))
+            continue
         fi
 
         total=$((total+1))
-
         bin="${meta%.meta}.bin"
         sz=$(du -shL "${bin}" 2>/dev/null | cut -f1)
         [ -z "${sz}" ] && sz="?"
@@ -94,63 +127,61 @@ ki_batch_for() {
         dur_sec=$(grep -m1 fileTimeSecs "${meta}" 2>/dev/null | cut -d= -f2)
         if [ -n "${dur_sec}" ]; then
             dur_min=$(awk "BEGIN{printf \"%.0f\", ${dur_sec} / 60}")
-            dur_disp="${dur_min} min"
+            dur_disp="${dur_min}m"
         else
             dur_disp="?"
         fi
-        # Mark very short recordings as test
         notes=""
         if [ -n "${dur_sec}" ] && [ "$(awk "BEGIN{print (${dur_sec} < 600)}")" = "1" ]; then
             notes="short (likely test)"
         fi
 
-        # Local + KI completeness (count of 4 expected shanks)
-        local_c=$(count_adv_curate_local "${sid}")
-        ki_c=$(count_adv_curate_ki "${sid}")
+        local_c=$(count_local "${sid}")
+        ki_c=$(count_ki "${sid}")
         ki_batch=$(ki_batch_for "${sid}")
+        dardel_c=${DARDEL_COUNT[$sid]:-0}
+        dardel_batch=${DARDEL_BATCH[$sid]:-}
 
-        local_mark="✗"
-        case "${local_c}" in
-            4) local_mark="✓"; full_local=$((full_local+1)) ;;
-            0) local_mark="✗" ;;
-            *) local_mark="${local_c}/4"; [ -z "${notes}" ] && notes="partial: ${local_c}/4 shanks" ;;
-        esac
+        local_mark=$(render_mark $local_c)
+        ki_mark=$(render_mark $ki_c)
+        dardel_mark=$(render_mark $dardel_c)
 
-        ki_mark="✗"
-        if [ "${ki_c}" = 4 ]; then
-            ki_mark="✓"
-            full_ki=$((full_ki+1))
-        elif [ "${ki_c}" != 0 ]; then
-            ki_mark="${ki_c}/4"
-            [ -z "${notes}" ] && notes="partial KI: ${ki_c}/4 shanks"
-        fi
-
-        if [ "${local_c}" = 0 ] && [ "${ki_c}" = 0 ]; then
-            pending=$((pending+1))
-        elif [ "${local_c}" != 4 ] && [ "${ki_c}" != 4 ]; then
+        # Summary counters
+        if [ "${ki_c}" = 4 ] || [ "${local_c}" = 4 ] || [ "${dardel_c}" = 4 ]; then
+            done_anywhere=$((done_anywhere+1))
+            if [ "${ki_c}" != 4 ] && [ "${local_c}" != 4 ]; then
+                only_dardel=$((only_dardel+1))
+                [ -z "${notes}" ] && notes="on Dardel only — needs sync to KI"
+            fi
+        elif [ "${local_c}" != 0 ] || [ "${ki_c}" != 0 ] || [ "${dardel_c}" != 0 ]; then
             partial=$((partial+1))
+            [ -z "${notes}" ] && notes="partial"
+        else
+            pending=$((pending+1))
+            [ -z "${notes}" ] && notes="pending"
         fi
 
-        echo "| \`${sid}\` | ${sz} | ${dur_disp} | ${local_mark} | ${ki_mark} | ${ki_batch:-—} | ${notes} |"
+        echo "| \`${sid}\` | ${sz} | ${dur_disp} | ${local_mark} | ${ki_mark} | ${dardel_mark} | ${ki_batch:-—} | ${dardel_batch:-—} | ${notes} |"
     done
 
     echo
-    echo "**Summary:** ${total} sessions • ${full_ki} fully on KI • ${full_local} fully local • ${partial} partial • ${pending} pending."
+    echo "**Summary** • ${total} valid sessions • ${done_anywhere} fully sorted somewhere • ${only_dardel} only on Dardel (needs KI sync) • ${partial} partial • ${pending} pending • ${skipped} raw entries skipped (0-byte/corrupt meta)."
     echo
-    echo "Legend: ✓ = 4/4 shanks adv-curated, N/4 = partial, ✗ = none."
+    echo "Legend: ✓ = 4/4 shanks adv-curated • N/4 = partial • ✗ = none."
     echo
     echo "Paths:"
-    echo "- Raw: \`${RAW_BASE}/\` (and \`${RAW_BASE}/batchN/\`)"
-    echo "- Local out: \`${LOCAL_RESULTS}/\`"
-    echo "- KI out: \`${KI_RESULTS_BASE}/<batch>/results/\`"
-} > "${OUT_TMP:=/tmp/_msv2_status.$$}"
+    echo "- **Raw (KI)**: \`${RAW_BASE}/\` (root and \`batchN/\` subdirs)"
+    echo "- **Local workstation**: \`${LOCAL_RESULTS}/<sid>/results/\`"
+    echo "- **KI processed**: \`${KI_RESULTS_BASE}/<batch>/results/<sid>/\`"
+    echo "- **Dardel processed**: \`${DARDEL_RESULTS_BASE}/<batch>/results/<sid>/\`"
+} > "${OUT_TMP}"
 
 if [ "${OUT}" = "-" ]; then
     cat "${OUT_TMP}"
+    rm -f "${OUT_TMP}"
 else
     mv "${OUT_TMP}" "${OUT}"
     echo "Wrote: ${OUT}"
     echo
-    head -30 "${OUT}"
-    echo "..."
+    head -50 "${OUT}"
 fi
