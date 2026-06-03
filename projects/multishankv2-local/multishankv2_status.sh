@@ -58,7 +58,13 @@ count_local() {
     local sid=$1
     local imec0="${LOCAL_RESULTS}/${sid}/results/${sid}/${sid}_imec0"
     [ -d "${imec0}" ] || { echo 0; return; }
-    ls "${imec0}"/shank*/advanced_curation_kilosort4.json 2>/dev/null | wc -l
+    # Use shopt nullglob-style expansion to avoid ls returning non-zero on empty
+    local matches=("${imec0}"/shank*/advanced_curation_kilosort4.json)
+    local n=0
+    for f in "${matches[@]}"; do
+        [ -f "${f}" ] && n=$((n+1))
+    done
+    echo "${n}"
 }
 count_ki() {
     local sid=$1
@@ -66,9 +72,13 @@ count_ki() {
         [ -d "${batch}" ] || continue
         local imec0="${batch}/${sid}_imec0"
         [ -d "${imec0}" ] || continue
-        local c=$(ls "${imec0}"/shank*/advanced_curation_kilosort4.json 2>/dev/null | wc -l)
-        if [ "${c}" -gt 0 ]; then
-            echo "${c}"
+        local matches=("${imec0}"/shank*/advanced_curation_kilosort4.json)
+        local n=0
+        for f in "${matches[@]}"; do
+            [ -f "${f}" ] && n=$((n+1))
+        done
+        if [ "${n}" -gt 0 ]; then
+            echo "${n}"
             return
         fi
     done
@@ -221,16 +231,19 @@ if [ -f "${LOG_FILE}" ]; then
             mapfile -t animal_ids < <(echo "${log_animal_raw}" | grep -oE '[0-9]{6,7}' | sort -u)
             [ "${#animal_ids[@]}" -eq 0 ] && continue
 
-            # Find any disk sid matching this date + any animal_id
+            # Find any disk sid containing this date AND any animal_id (substring
+            # match — handles sids like 2026-04-19_997287_1027553_opto_g0 where
+            # multiple animals appear in the name, or where the outer dir's date
+            # differs from the inner imec's date)
             matches=""
-            for a in "${animal_ids[@]}"; do
-                for sid in "${FOUND_SIDS[@]}"; do
-                    case "${sid}" in
-                        "${log_date}_${a}_"*)
-                            [ -n "${matches}" ] && matches+=";"
-                            matches+="${sid}"
-                            ;;
-                    esac
+            for sid in "${FOUND_SIDS[@]}"; do
+                [[ "${sid}" == *"${log_date}"* ]] || continue
+                for a in "${animal_ids[@]}"; do
+                    if [[ "${sid}" == *"${a}"* ]]; then
+                        [ -n "${matches}" ] && matches+=";"
+                        matches+="${sid}"
+                        break
+                    fi
                 done
             done
 
