@@ -21,7 +21,7 @@ RAW_BASE="/mnt/dmclab/Anil/DATA_NPX"
 LOCAL_RESULTS="/media/data/ephys-pipeline-output"
 KI_RESULTS_BASE="/mnt/dmclab/Anil/ephys-pipeline-output"
 DARDEL_RESULTS_BASE="/cfs/klemming/projects/supr/dmclab/ephys-pipeline-output"
-DEFAULT_OUT="${RAW_BASE}/MASTER_STATUS.md"
+DEFAULT_OUT="${RAW_BASE}/MASTER_STATUS.csv"
 
 OUT="${1:-${DEFAULT_OUT}}"
 
@@ -96,12 +96,7 @@ render_mark() {
 
 OUT_TMP="/tmp/_msv2_status.$$"
 {
-    echo "# multishankv2 master status"
-    echo
-    echo "_Generated $(date '+%Y-%m-%d %H:%M') from raw (KI) + local + KI processed + Dardel state._"
-    echo
-    echo "| Session | Raw size | Dur | Local | KI | Dardel | KI batch | Dardel batch | Notes |"
-    echo "|---|---:|---:|:---:|:---:|:---:|---|---|---|"
+    echo "session,raw_size,raw_size_gb,duration_min,local_shanks,ki_shanks,dardel_shanks,ki_batch,dardel_batch,status,notes"
 
     total=0; done_anywhere=0; only_dardel=0; partial=0; pending=0; skipped=0
     for meta in "${METAS[@]}"; do
@@ -121,15 +116,18 @@ OUT_TMP="/tmp/_msv2_status.$$"
 
         total=$((total+1))
         bin="${meta%.meta}.bin"
-        sz=$(du -shL "${bin}" 2>/dev/null | cut -f1)
+        # Force C locale so du uses "." not "," (avoids breaking CSV parsing)
+        sz=$(LC_ALL=C du -shL "${bin}" 2>/dev/null | cut -f1)
         [ -z "${sz}" ] && sz="?"
+        # Numeric size in GB (for sum/sort in spreadsheets)
+        sz_bytes=$(LC_ALL=C stat -c %s "${bin}" 2>/dev/null || echo 0)
+        sz_gb=$(awk "BEGIN{printf \"%.1f\", ${sz_bytes} / 1024 / 1024 / 1024}")
 
         dur_sec=$(grep -m1 fileTimeSecs "${meta}" 2>/dev/null | cut -d= -f2)
         if [ -n "${dur_sec}" ]; then
             dur_min=$(awk "BEGIN{printf \"%.0f\", ${dur_sec} / 60}")
-            dur_disp="${dur_min}m"
         else
-            dur_disp="?"
+            dur_min=""
         fi
         notes=""
         if [ -n "${dur_sec}" ] && [ "$(awk "BEGIN{print (${dur_sec} < 600)}")" = "1" ]; then
@@ -142,38 +140,42 @@ OUT_TMP="/tmp/_msv2_status.$$"
         dardel_c=${DARDEL_COUNT[$sid]:-0}
         dardel_batch=${DARDEL_BATCH[$sid]:-}
 
-        local_mark=$(render_mark $local_c)
-        ki_mark=$(render_mark $ki_c)
-        dardel_mark=$(render_mark $dardel_c)
-
-        # Summary counters
+        # Status classification (single canonical label per row, easy to filter)
         if [ "${ki_c}" = 4 ] || [ "${local_c}" = 4 ] || [ "${dardel_c}" = 4 ]; then
             done_anywhere=$((done_anywhere+1))
-            if [ "${ki_c}" != 4 ] && [ "${local_c}" != 4 ]; then
+            if [ "${ki_c}" = 4 ]; then
+                status="on_ki"
+            elif [ "${local_c}" = 4 ] && [ "${dardel_c}" = 4 ]; then
+                status="on_local_and_dardel"
+            elif [ "${local_c}" = 4 ]; then
+                status="on_local_only"
+                [ -z "${notes}" ] && notes="local copy — should push to KI"
+            elif [ "${dardel_c}" = 4 ]; then
+                status="on_dardel_only"
                 only_dardel=$((only_dardel+1))
                 [ -z "${notes}" ] && notes="on Dardel only — needs sync to KI"
             fi
         elif [ "${local_c}" != 0 ] || [ "${ki_c}" != 0 ] || [ "${dardel_c}" != 0 ]; then
+            status="partial"
             partial=$((partial+1))
-            [ -z "${notes}" ] && notes="partial"
+            [ -z "${notes}" ] && notes="partial (missing some shanks)"
         else
+            status="pending"
             pending=$((pending+1))
-            [ -z "${notes}" ] && notes="pending"
+            [ -z "${notes}" ] && notes="not yet processed"
         fi
 
-        echo "| \`${sid}\` | ${sz} | ${dur_disp} | ${local_mark} | ${ki_mark} | ${dardel_mark} | ${ki_batch:-—} | ${dardel_batch:-—} | ${notes} |"
+        # Escape any commas in notes
+        notes_clean=$(echo "${notes}" | sed 's/,/;/g')
+        echo "${sid},${sz},${sz_gb},${dur_min},${local_c},${ki_c},${dardel_c},${ki_batch:-},${dardel_batch:-},${status},${notes_clean}"
     done
 
-    echo
-    echo "**Summary** • ${total} valid sessions • ${done_anywhere} fully sorted somewhere • ${only_dardel} only on Dardel (needs KI sync) • ${partial} partial • ${pending} pending • ${skipped} raw entries skipped (0-byte/corrupt meta)."
-    echo
-    echo "Legend: ✓ = 4/4 shanks adv-curated • N/4 = partial • ✗ = none."
-    echo
-    echo "Paths:"
-    echo "- **Raw (KI)**: \`${RAW_BASE}/\` (root and \`batchN/\` subdirs)"
-    echo "- **Local workstation**: \`${LOCAL_RESULTS}/<sid>/results/\`"
-    echo "- **KI processed**: \`${KI_RESULTS_BASE}/<batch>/results/<sid>/\`"
-    echo "- **Dardel processed**: \`${DARDEL_RESULTS_BASE}/<batch>/results/<sid>/\`"
+    # Trailing summary as comment-style lines (Excel ignores; humans can read)
+    echo "# Generated $(date '+%Y-%m-%d %H:%M')"
+    echo "# Summary: ${total} valid sessions; ${done_anywhere} fully sorted somewhere; ${only_dardel} only on Dardel (needs KI sync); ${partial} partial; ${pending} pending; ${skipped} skipped (0-byte/corrupt meta)"
+    echo "# Status values: on_ki | on_local_and_dardel | on_local_only | on_dardel_only | partial | pending"
+    echo "# Shanks columns: 0..4 (count of shanks with advanced_curation_kilosort4.json)"
+    echo "# Paths: raw=${RAW_BASE}/; local=${LOCAL_RESULTS}/<sid>/results/; ki=${KI_RESULTS_BASE}/<batch>/results/<sid>/; dardel=${DARDEL_RESULTS_BASE}/<batch>/results/<sid>/"
 } > "${OUT_TMP}"
 
 if [ "${OUT}" = "-" ]; then
@@ -183,5 +185,5 @@ else
     mv "${OUT_TMP}" "${OUT}"
     echo "Wrote: ${OUT}"
     echo
-    head -50 "${OUT}"
+    column -s, -t < "${OUT}" | head -50
 fi
