@@ -21,7 +21,7 @@ RAW_BASE="/mnt/dmclab/Anil/DATA_NPX"
 LOCAL_RESULTS="/media/data/ephys-pipeline-output"
 KI_RESULTS_BASE="/mnt/dmclab/Anil/ephys-pipeline-output"
 DARDEL_RESULTS_BASE="/cfs/klemming/projects/supr/dmclab/ephys-pipeline-output"
-DEFAULT_OUT="${RAW_BASE}/MASTER_STATUS.csv"
+DEFAULT_OUT="${RAW_BASE}/SESSIONS_STATUS.csv"
 
 OUT="${1:-${DEFAULT_OUT}}"
 
@@ -95,8 +95,9 @@ render_mark() {
 }
 
 OUT_TMP="/tmp/_msv2_status.$$"
+declare -a FOUND_SIDS=()
 {
-    echo "session,raw_size,raw_size_gb,duration_min,local_shanks,ki_shanks,dardel_shanks,ki_batch,dardel_batch,status,notes"
+    echo "session,raw_location,raw_size,raw_size_gb,duration_min,local_shanks,ki_shanks,dardel_shanks,ki_batch,dardel_batch,status,notes"
 
     total=0; done_anywhere=0; only_dardel=0; partial=0; pending=0; skipped=0
     for meta in "${METAS[@]}"; do
@@ -122,6 +123,15 @@ OUT_TMP="/tmp/_msv2_status.$$"
         # Numeric size in GB (for sum/sort in spreadsheets)
         sz_bytes=$(LC_ALL=C stat -c %s "${bin}" 2>/dev/null || echo 0)
         sz_gb=$(awk "BEGIN{printf \"%.1f\", ${sz_bytes} / 1024 / 1024 / 1024}")
+
+        # Compact raw_location label: "DATA_NPX root", "batchN", "<animal>/<date>/recording"
+        rel_path="${imec_dir#${RAW_BASE}/}"
+        case "${rel_path}" in
+            batch*/*) raw_loc=$(echo "${rel_path}" | cut -d/ -f1) ;;
+            */*/recording/*) raw_loc=$(echo "${rel_path}" | cut -d/ -f1-3) ;;
+            ${sid}/${imec_base}) raw_loc="DATA_NPX root" ;;
+            *) raw_loc="${rel_path%/*}" ;;
+        esac
 
         dur_sec=$(grep -m1 fileTimeSecs "${meta}" 2>/dev/null | cut -d= -f2)
         if [ -n "${dur_sec}" ]; then
@@ -167,7 +177,7 @@ OUT_TMP="/tmp/_msv2_status.$$"
 
         # Escape any commas in notes
         notes_clean=$(echo "${notes}" | sed 's/,/;/g')
-        echo "${sid},${sz},${sz_gb},${dur_min},${local_c},${ki_c},${dardel_c},${ki_batch:-},${dardel_batch:-},${status},${notes_clean}"
+        echo "${sid},${raw_loc},${sz},${sz_gb},${dur_min},${local_c},${ki_c},${dardel_c},${ki_batch:-},${dardel_batch:-},${status},${notes_clean}"
     done
 
     # Trailing summary as comment-style lines (Excel ignores; humans can read)
@@ -182,8 +192,75 @@ if [ "${OUT}" = "-" ]; then
     cat "${OUT_TMP}"
     rm -f "${OUT_TMP}"
 else
-    mv "${OUT_TMP}" "${OUT}"
+    # CIFS has cache coherency quirks where mv-over-existing fails.
+    # Open-and-truncate via cat avoids creating a new inode.
+    cat "${OUT_TMP}" > "${OUT}"
+    rm -f "${OUT_TMP}"
     echo "Wrote: ${OUT}"
-    echo
-    column -s, -t < "${OUT}" | head -50
 fi
+
+# ── MISSING_RECORDINGS: cross-reference experimenter log with disk ───────────
+LOG_FILE="${RAW_BASE}/neuropixels_recording_log.xlsm - Recordings.csv"
+MISSING_OUT="${RAW_BASE}/MISSING_RECORDINGS.csv"
+if [ -f "${LOG_FILE}" ]; then
+    echo "[scan] cross-referencing experimenter log ..." >&2
+    # Re-read the SIDs from the CSV we just wrote (subshell-safe)
+    mapfile -t FOUND_SIDS < <(awk -F, 'NR>1 && $1 !~ /^#/ {print $1}' "${OUT}")
+    {
+        echo "log_date,log_animal,log_purpose,disk_sessions,status,note"
+        while IFS= read -r line; do
+            # Skip header
+            [ "${line%%,*}" = "Date" ] && continue
+            # First three CSV fields (Date, Animal ID, Purpose)
+            log_date=$(echo "${line}" | awk -F, '{print $1}')
+            log_animal_raw=$(echo "${line}" | awk -F, '{print $2}')
+            log_purpose=$(echo "${line}" | awk -F, '{print $3}')
+            [ -z "${log_date}" ] && continue
+            # Extract numeric animal IDs (handles "1021200 (files named 1021202)" by taking
+            # any 6-7 digit sequences in the field)
+            mapfile -t animal_ids < <(echo "${log_animal_raw}" | grep -oE '[0-9]{6,7}' | sort -u)
+            [ "${#animal_ids[@]}" -eq 0 ] && continue
+
+            # Find any disk sid matching this date + any animal_id
+            matches=""
+            for a in "${animal_ids[@]}"; do
+                for sid in "${FOUND_SIDS[@]}"; do
+                    case "${sid}" in
+                        "${log_date}_${a}_"*)
+                            [ -n "${matches}" ] && matches+=";"
+                            matches+="${sid}"
+                            ;;
+                    esac
+                done
+            done
+
+            # Dedup matches (sed instead of grep -v since grep -v returns 1 on no matches → pipefail)
+            matches=$(echo "${matches}" | tr ';' '\n' | sort -u | sed '/^$/d' | paste -sd';' -)
+
+            if [ -n "${matches}" ]; then
+                status="found"
+                note=""
+            else
+                status="MISSING"
+                note="logged but no raw on disk under ${RAW_BASE}"
+            fi
+
+            # CSV-safe
+            log_purpose_clean=$(echo "${log_purpose}" | sed 's/,/;/g')
+            note_clean=$(echo "${note}" | sed 's/,/;/g')
+            log_animal_clean=$(echo "${log_animal_raw}" | sed 's/,/;/g')
+
+            echo "${log_date},${log_animal_clean},${log_purpose_clean},${matches},${status},${note_clean}"
+        done < "${LOG_FILE}"
+    } > "${MISSING_OUT}.tmp"
+    cat "${MISSING_OUT}.tmp" > "${MISSING_OUT}"
+    rm -f "${MISSING_OUT}.tmp"
+    echo "Wrote: ${MISSING_OUT}"
+    n_missing=$(awk -F, '$5 == "MISSING"' "${MISSING_OUT}" | wc -l)
+    n_found=$(awk -F, '$5 == "found"' "${MISSING_OUT}" | wc -l)
+    echo "  ${n_found} log entries match disk, ${n_missing} have no disk match."
+fi
+
+echo
+echo "Preview (column-aligned):"
+column -s, -t < "${OUT}" | head -50
