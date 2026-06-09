@@ -1,3 +1,8 @@
 #!/bin/bash
-export LD_LIBRARY_PATH=/opt/cray/libfabric/1.22.0/lib64:/opt/cray/pe/papi/7.2.0.1/lib64:/opt/cray/pe/papi/7.1.0.4/lib64:${LD_LIBRARY_PATH:-}
+# Dardel updates libfabric/papi on compute nodes periodically (e.g. 1.22.0 → 2.3.1
+# in early June 2026). Discover the installed versions dynamically so this wrapper
+# keeps working across updates. Picks the highest-versioned directory present.
+LIBFABRIC_DIR=$(ls -d /opt/cray/libfabric/*/lib64 2>/dev/null | sort -V | tail -1)
+PAPI_DIRS=$(ls -d /opt/cray/pe/papi/*/lib64 2>/dev/null | sort -V | paste -sd: -)
+export LD_LIBRARY_PATH="${LIBFABRIC_DIR}:${PAPI_DIRS}:${LD_LIBRARY_PATH:-}"
 exec /pdc/software/eb/software/apptainer/1.4.4/bin/apptainer "$@"
