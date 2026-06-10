@@ -126,7 +126,7 @@ $NF_BIN \
     -with-trace    "${LOGDIR}/${SLURM_JOB_ID}_trace.txt" \
     -with-timeline "${LOGDIR}/${SLURM_JOB_ID}_timeline.html" \
     -resume \
-    --test_duration_sec 60 \
+    --test_duration_sec 600 \
     --run_sc2 false \
     --run_lupin false
 
