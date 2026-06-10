@@ -137,7 +137,80 @@ beforeScript = """
 
 | File | Purpose |
 |------|---------|
-| `kilosort4-arm.def` | Container definition (OpenBLAS replacement) |
-| `build-ks4.sh` | SLURM batch build + 8 verification tests |
+| `kilosort4-arm.def` | Container definition (OpenBLAS replacement + base image pin) |
+| `build-ks4.sh` | SLURM batch build + 9 verification tests (incl. cuFFT) |
+| `pipeline/bin_gh200/apptainer` | Wrapper that injects libfabric/papi LD_LIBRARY_PATH |
 | `../projects/pfcv2/scripts/02-sort.py` | Runtime BLAS shim (lines 18–54) |
 | `../projects/pfcv2/nextflow.config` | Custom apptainer injection (SORT_KS4 `beforeScript`) |
+
+---
+
+## June 2026 Dardel system update — three follow-up fixes
+
+Dardel refreshed the GH200 partition's OS image around June 8 2026. Three
+things broke in sequence and were fixed in this order.
+
+### 1. libfabric path bumped on GH200 (1.22.0 → 2.3.1)
+
+**Symptom:** every SORT_KS4_BATCH task died with
+`apptainer: error while loading shared libraries: libfabric.so.1: cannot
+open shared object file: No such file or directory`.
+
+**Cause:** `pipeline/bin_gh200/apptainer` hardcoded
+`LD_LIBRARY_PATH=/opt/cray/libfabric/1.22.0/lib64:...`. That path no
+longer exists on GH200; libfabric moved to `2.3.1`. (Login node still
+had 1.22.0, so testing the wrapper there gave false confidence.)
+
+**Fix:** make the wrapper version-agnostic — glob
+`/opt/cray/libfabric/*/lib64`, sort -V, take the highest version. Same
+for the PAPI paths. Now self-heals across Dardel updates.
+
+### 2. squashfuse_ll dropped lz4 support
+
+**Symptom (revealed after fix 1):**
+`FATAL: container creation failed: ... squashfuse_ll exited:
+Squashfs image uses lz4 compression, this version supports only
+zlib, lzma, xz.`
+
+**Cause:** `build-ks4.sh` invoked
+`apptainer build --mksquashfs-args "-comp lz4"`. The newer
+`squashfuse_ll` on GH200 dropped lz4.
+
+**Fix:** switched to `-comp xz` (per the error message; xz is supported,
+and the SIF turns out to be ~27 % smaller too — 8.0 GB vs 11 GB).
+
+### 3. CUDA forward-compat shim breaks under apptainer's read-only FS
+
+**Symptom (revealed after fixes 1 + 2):** kilosort starts loading, gets to
+the FFT-based whitening matrix, then dies with
+`RuntimeError: cuFFT error: CUFFT_INTERNAL_ERROR`. Only cuFFT — basic
+`torch.cuda.matmul` works.
+
+**Cause:** `nvcr.io/nvidia/pytorch:26.02-py3` bundles torch built against
+**CUDA 13.1**. Dardel GH200 host driver is **CUDA 13.0**. NVIDIA's
+PyTorch image ships a forward-compatibility shim at
+`/usr/local/cuda/compat/lib/` that an entrypoint script wires up at
+container start — but that script tries to `rm` the directory, which
+fails silently because apptainer mounts the SIF **read-only**. Result:
+the shim is left in a half-broken state. Most ops work; cuFFT doesn't.
+
+**Fix:** pinned the base image to `nvcr.io/nvidia/pytorch:25.12-py3`,
+which bundles torch built against CUDA 13.0 — matches the host driver
+exactly, no shim needed.
+
+**Bump rule going forward:** only move the base image past a
+`pytorch:YY.MM-py3` whose CUDA matches Dardel's GH200 host driver
+(check with `nvidia-smi` on a GH200 node, look at `CUDA Version:` in
+the header). NVIDIA's release notes at
+<https://docs.nvidia.com/deeplearning/frameworks/pytorch-release-notes/>
+list each image's CUDA version.
+
+### Detection: Test 9 in `build-ks4.sh`
+
+The above CUDA mismatch was invisible to Tests 1–8 because none of them
+called cuFFT (matmul passes through cuBLAS, not cuFFT). **Test 9** was
+added to do `torch.fft.fft(torch.randn(n, device='cuda'))` at three
+sizes including the kilosort-style 16384×32 — exactly the failure mode
+seen in production. Any future build that picks up an incompatible
+CUDA combo will now fail at build time, not 30 sec into a SORT_KS4_BATCH
+task in production.
