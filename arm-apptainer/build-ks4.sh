@@ -60,7 +60,7 @@ echo "=== Building SIF ==="
 # Remove old SIF so a failed build doesn't leave a stale file
 [ -f "$SIF_PATH" ] && mv "$SIF_PATH" "${SIF_PATH}.bak"
 
-apptainer build --mksquashfs-args "-comp lz4" "$SIF_PATH" "$DEF_PATH"
+apptainer build --mksquashfs-args "-comp xz" "$SIF_PATH" "$DEF_PATH"
 
 BUILD_EXIT=$?
 if [ $BUILD_EXIT -ne 0 ]; then
