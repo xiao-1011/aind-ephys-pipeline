@@ -3,11 +3,16 @@
 # Build on Dardel gh node:
 #   sbatch build-ks4.sh
 #
-# NOTE: --mksquashfs-args "-comp lz4" is required — GH200 compute nodes only
-# support lz4, not the default zlib compression.
+# NOTE: --mksquashfs-args "-comp xz" is required — GH200 compute nodes use
+# a squashfuse_ll variant that supports only zlib/lzma/xz, not lz4.
+#
+# NOTE: base image pinned to 25.12 (CUDA 13.0) to match Dardel's GH200 host
+# driver (CUDA 13.0). Newer 26.02-py3 ships CUDA 13.1 → cuFFT fails because
+# apptainer's read-only SIF blocks the CUDA forward-compat shim from being
+# wired up at container start. Bump only when Dardel driver moves to ≥ 13.1.
 
 Bootstrap: docker
-From: nvcr.io/nvidia/pytorch:26.02-py3
+From: nvcr.io/nvidia/pytorch:25.12-py3
 
 %labels
     Author aind-ephys-pipeline

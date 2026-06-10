@@ -29,7 +29,7 @@ echo "Arch:     $(uname -m)"
 
 PIPELINE_PATH="/cfs/klemming/projects/supr/dmclab/aind-ephys-pipeline-pfc"
 CACHE_BASE="/cfs/klemming/projects/supr/dmclab/ephys-pipeline-cache"
-SIF_PATH="${CACHE_BASE}/apptainer/kilosort4-arm.sif"
+SIF_PATH="${CACHE_BASE}/apptainer/kilosort4-arm-test.sif"
 DEF_PATH="${PIPELINE_PATH}/arm-apptainer/kilosort4-arm.def"
 
 # Use /tmp for build temp — faster than Lustre for small-file operations.
@@ -197,6 +197,18 @@ if torch.cuda.is_available():
     t = torch.randn(1000, 1000, device='cuda')
     r = t @ t
     print(f'GPU matmul OK: {r.shape}')
+print('PASS')
+"
+
+run_test "Test 9: cuFFT works (host-driver/cuFFT compatibility — the kilosort failure point)" \
+$RUN python -c "
+import torch
+# Small + medium + kilosort-style sizes
+for n in (1024, 60_000, 16_384 * 32):
+    x = torch.randn(n, device='cuda')
+    y = torch.fft.fft(x)
+    assert y.shape == (n,)
+    print(f'cuFFT OK at n={n}')
 print('PASS')
 "
 
