@@ -36,6 +36,20 @@ def _int(uid):
     return int(uid) if isinstance(uid, np.integer) else uid
 
 
+def _all_unknown_labels(unit_ids):
+    """Build a fallback labels DataFrame marking every unit as 'unknown'.
+
+    Used when UnitRefine fails (0 units, all-NaN features, model crash, etc.)
+    so that downstream code still gets a well-formed labels table.
+    """
+    unit_ids = list(unit_ids)
+    return pd.DataFrame(
+        {"prediction": ["unknown"] * len(unit_ids),
+         "probability": [0.0] * len(unit_ids)},
+        index=unit_ids,
+    )
+
+
 def _resolve_hf_model_path(repo_id):
     """Resolve a HuggingFace repo_id to its local cache snapshot path.
 
@@ -159,28 +173,73 @@ def main():
         print("  No redundant units found")
     n_after_dedup = len(analyzer.unit_ids)
 
+    # Status accumulator — flipped to "failed"/"skipped_..." if any step falls
+    # back. Persisted into the JSON output and a *.WARNING sentinel file so
+    # downstream consumers (and humans grepping the results tree) can see
+    # which probes had degenerate sortings without digging into work dirs.
+    status = {
+        "unitrefine_noise_status": "ok",
+        "unitrefine_noise_error":  None,
+        "merge_status":            "ok",
+        "merge_error":             None,
+        "unitrefine_sua_status":   "ok",
+        "unitrefine_sua_error":    None,
+    }
+
     # 1b. UnitRefine noise/neural classifier
     print("\n--- UnitRefine noise/neural classifier ---")
     _noise_repo = "SpikeInterface/UnitRefine_noise_neural_classifier_lightweight"
-    noise_neuron_labels = sc.model_based_label_units(
-        sorting_analyzer=analyzer,
-        model_folder=_resolve_hf_model_path(_noise_repo),
-        trust_model=True,
-    )
-    noise_units = noise_neuron_labels[noise_neuron_labels["prediction"] == "noise"]
-    neural_units = noise_neuron_labels[noise_neuron_labels["prediction"] != "noise"]
+    if n_after_dedup == 0:
+        print("  WARNING: 0 units after redundancy removal — skipping UnitRefine noise classifier.")
+        status["unitrefine_noise_status"] = "skipped_no_units"
+        noise_neuron_labels = _all_unknown_labels([])
+        noise_units  = pd.DataFrame(columns=["prediction", "probability"])
+        neural_units = pd.DataFrame(columns=["prediction", "probability"])
+    else:
+        try:
+            noise_neuron_labels = sc.model_based_label_units(
+                sorting_analyzer=analyzer,
+                model_folder=_resolve_hf_model_path(_noise_repo),
+                trust_model=True,
+            )
+            noise_units  = noise_neuron_labels[noise_neuron_labels["prediction"] == "noise"]
+            neural_units = noise_neuron_labels[noise_neuron_labels["prediction"] != "noise"]
+        except Exception as e:
+            msg = f"{type(e).__name__}: {e}"
+            print(f"  WARNING: UnitRefine noise classifier failed ({msg}).")
+            print("  Falling back: marking all units 'unknown', treating none as noise.")
+            status["unitrefine_noise_status"] = "failed"
+            status["unitrefine_noise_error"]  = msg
+            noise_neuron_labels = _all_unknown_labels(analyzer.unit_ids)
+            noise_units  = pd.DataFrame(columns=["prediction", "probability"])
+            neural_units = noise_neuron_labels.copy()
     print(f"  Noise: {len(noise_units)} / {n_after_dedup}")
     print(f"  Neural: {len(neural_units)} / {n_after_dedup}")
 
-    analyzer_neural = analyzer.select_units(list(neural_units.index))
+    if len(neural_units) > 0:
+        analyzer_neural = analyzer.select_units(list(neural_units.index))
+    else:
+        analyzer_neural = None
 
     # 1c. Auto-merge split units (on neural units only)
     print("\n--- Auto-merge (similarity_correlograms) ---")
-    merge_groups = sc.compute_merge_unit_groups(
-        analyzer_neural,
-        preset="similarity_correlograms",
-        steps_params={"template_similarity": {"template_diff_thresh": 0.5}},
-    )
+    if analyzer_neural is None:
+        print("  WARNING: 0 neural units — skipping auto-merge.")
+        status["merge_status"] = "skipped_no_neural_units"
+        merge_groups = []
+    else:
+        try:
+            merge_groups = sc.compute_merge_unit_groups(
+                analyzer_neural,
+                preset="similarity_correlograms",
+                steps_params={"template_similarity": {"template_diff_thresh": 0.5}},
+            )
+        except Exception as e:
+            msg = f"{type(e).__name__}: {e}"
+            print(f"  WARNING: auto-merge failed ({msg}). Continuing with no merges.")
+            status["merge_status"] = "failed"
+            status["merge_error"]  = msg
+            merge_groups = []
     n_merges = len(merge_groups)
     n_units_merged = sum(len(g) for g in merge_groups)
     print(f"  {n_merges} merge groups ({n_units_merged} units → {n_merges} merged)")
@@ -204,15 +263,31 @@ def main():
     # 2a. UnitRefine SUA/MUA classifier (on neural units only)
     print("\n--- UnitRefine SUA/MUA classifier ---")
     _sua_repo = "SpikeInterface/UnitRefine_sua_mua_classifier_lightweight"
-    sua_mua_labels = sc.model_based_label_units(
-        sorting_analyzer=analyzer_neural,
-        model_folder=_resolve_hf_model_path(_sua_repo),
-        trust_model=True,
-    )
-    # Merge with noise labels for a complete per-unit table
-    unit_refine_labels = pd.concat([sua_mua_labels, noise_units]).sort_index()
-    sua_units = sua_mua_labels[sua_mua_labels["prediction"] == "sua"]
-    mua_units = sua_mua_labels[sua_mua_labels["prediction"] == "mua"]
+    if analyzer_neural is None:
+        print("  WARNING: 0 neural units — skipping UnitRefine SUA/MUA classifier.")
+        status["unitrefine_sua_status"] = "skipped_no_neural_units"
+        sua_mua_labels = pd.DataFrame(columns=["prediction", "probability"])
+    else:
+        try:
+            sua_mua_labels = sc.model_based_label_units(
+                sorting_analyzer=analyzer_neural,
+                model_folder=_resolve_hf_model_path(_sua_repo),
+                trust_model=True,
+            )
+        except Exception as e:
+            msg = f"{type(e).__name__}: {e}"
+            print(f"  WARNING: UnitRefine SUA/MUA classifier failed ({msg}).")
+            print("  Falling back: marking neural units 'unknown'.")
+            status["unitrefine_sua_status"] = "failed"
+            status["unitrefine_sua_error"]  = msg
+            sua_mua_labels = _all_unknown_labels(neural_units.index)
+    # Merge with noise labels for a complete per-unit table (handle empty inputs)
+    if len(sua_mua_labels) == 0 and len(noise_units) == 0:
+        unit_refine_labels = pd.DataFrame(columns=["prediction", "probability"])
+    else:
+        unit_refine_labels = pd.concat([sua_mua_labels, noise_units]).sort_index()
+    sua_units = sua_mua_labels[sua_mua_labels["prediction"] == "sua"] if len(sua_mua_labels) else sua_mua_labels
+    mua_units = sua_mua_labels[sua_mua_labels["prediction"] == "mua"] if len(sua_mua_labels) else sua_mua_labels
     print(f"  SUA: {len(sua_units)} / MUA: {len(mua_units)} / Noise: {len(noise_units)}")
 
     # 2b. Bombcell labels (on full analyzer, before noise removal)
@@ -280,11 +355,31 @@ def main():
             str(_int(uid)): bool(pq)
             for uid, pq in zip(analyzer.unit_ids, passing_qc)
         },
+        # Status fields — see top of main() for definitions. "ok" means the
+        # step ran normally; "skipped_no_units"/"skipped_no_neural_units" mean
+        # there was nothing to feed it; "failed" + an *_error string means it
+        # raised an exception and we fell back to 'unknown' labels.
+        **status,
     }
     adv_file = output_folder / f"advanced_curation_{sorter_name}.json"
     with open(adv_file, "w") as f:
         json.dump(adv_curation, f, indent=2)
     print(f"\nAdvanced curation saved to: {adv_file.name}")
+
+    # Sentinel WARNING file if any step fell back. Visible via `find -name
+    # '*.WARNING'` from the results tree; pairs with the status fields above.
+    problems = {k: v for k, v in status.items() if k.endswith("_status") and v != "ok"}
+    if problems:
+        warn_file = output_folder / f"advanced_curation_{sorter_name}.WARNING"
+        with open(warn_file, "w") as f:
+            f.write(f"Sorter:  {sorter_name}\n")
+            f.write(f"Issues:  {', '.join(f'{k}={v}' for k, v in problems.items())}\n")
+            f.write(f"n_original_units: {n_original}\n")
+            f.write(f"n_after_dedup:    {n_after_dedup}\n")
+            f.write(f"n_neural_units:   {len(neural_units)}\n\n")
+            f.write("Full status:\n")
+            f.write(json.dumps({k: status[k] for k in sorted(status)}, indent=2))
+        print(f"WARNING: {sorter_name} had fallback(s); wrote {warn_file.name}")
 
     # B. CurationModel v2 dict (for offline GUI / spikeinterface_gui)
     label_definitions = {
