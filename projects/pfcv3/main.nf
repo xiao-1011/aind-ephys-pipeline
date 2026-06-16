@@ -321,9 +321,13 @@ process ADVANCED_CURATE {
 
     output:
     tuple val(sid), val(probe), val(duration_minutes),
-          path('sorting_clean_*'),              emit: clean_sorting
+          path('sorting_clean_*'),                       emit: clean_sorting
     tuple val(sid), val(probe), val(duration_minutes),
-          path('advanced_curation_*.json'),     emit: adv_labels
+          path('advanced_curation_*.json'),              emit: adv_labels
+    // WARNING sentinel — written by 07-advanced-curate.py when any step had to
+    // fall back (e.g. 0 units, UnitRefine crash). Optional because the
+    // common case is no warnings.
+    path('advanced_curation_*.WARNING'), optional: true, emit: warnings
     path(analyzer_dir)  // re-publish with bombcell/unitrefine/passing_qc JSONs
 
     script:
@@ -345,9 +349,10 @@ process ADV_CURATE_LPN {
 
     output:
     tuple val(sid), val(probe), val(duration_minutes),
-          path('sorting_clean_*'),              emit: clean_sorting
+          path('sorting_clean_*'),                       emit: clean_sorting
     tuple val(sid), val(probe), val(duration_minutes),
-          path('advanced_curation_*.json'),     emit: adv_labels
+          path('advanced_curation_*.json'),              emit: adv_labels
+    path('advanced_curation_*.WARNING'), optional: true, emit: warnings
     path(analyzer_dir)  // re-publish with bombcell/unitrefine/passing_qc JSONs
 
     script:

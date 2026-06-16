@@ -370,6 +370,18 @@ def main():
     # Pairwise comparisons — O(N^2/2) but N is small (2-6 sorters)
     for (i, name_i), (j, name_j) in combinations(enumerate(names), 2):
         print(f"\nComparing {name_i} vs {name_j}...")
+        # Guard against empty sortings (e.g. clean sorting where all units
+        # were classified as noise by UnitRefine). spikeinterface's
+        # compare_two_sorters in 0.103 raises ValueError on empty unit_ids
+        # because make_best_match can't infer the dtype. We treat empty as
+        # "no matches with any other sorter" and continue.
+        n_i = len(sortings[i].get_unit_ids())
+        n_j = len(sortings[j].get_unit_ids())
+        if n_i == 0 or n_j == 0:
+            print(f"  Skipping: {name_i}={n_i} units, {name_j}={n_j} units. "
+                  "Recording no matches.")
+            continue
+
         cmp = si.compare_two_sorters(
             sortings[i], sortings[j],
             sorting1_name=name_i,
