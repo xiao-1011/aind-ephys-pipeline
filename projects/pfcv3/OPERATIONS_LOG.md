@@ -27,6 +27,13 @@ was done, when, and roughly why — without spelunking through git log.
 ---
 
 ## 2026-06-22
+- [Claude] Extended `pfcv3_status.sh` to emit a probe-level companion CSV (`PFC_STATUS_probes.csv`) alongside the session-level one. Columns: `session, probe, animal, ks4_ok, tdc2_ok, consensus_ok, clean_ks4_units, clean_tdc2_units, n_warnings, warning_files`. Unit counts pulled from `advanced_curation_*.json`. First run: 97 probes, 90 all-OK, 7 incomplete (1× known 0-unit case on 1033993_day1_imec1; 6× batch3-era probes missing `consensus_clean.json`: 986168 d1/d3 imec1, 986171 d3 imec0, 986235 d2 imec0/imec1, 986235 d3 imec1).
+- [Anil] Copied batch 6 data onto dardel.
+rsync -av --partial --info=progress2 \
+    --bwlimit=30M \
+    -e "ssh -c aes128-gcm@openssh.com -o Compression=no" \
+    /mnt/smb/dmclab/Joana/PFC-Str_behavior_project/Recordings/Raw_data/{1021218,1053833,1060138,1031913,1060360,1033996} \
+    dardelcopy:/cfs/klemming/projects/supr/dmclab/Joana/Raw_data/
 
 - [Claude] Added 1033996 (904 GB raw, 4 days complete) to `Joana/ephys_batch6/` staging. Batch6 is now 6 animals: 1021218, 1053833, 1060138, 1031913, 1060360, 1033996 (~6.5 TB raw total). Anil chose 1033996 over 1061234 because it's the newest "complete" animal (4 days).
 - [Claude] Deleted `pfcv2/` (292 GB; 999770_day1 SC2+Lupin+MS5) and `pfcv3/` (446 GB; 986169 d1+d2 TDC2+SC2+Lupin) from Dardel — user-confirmed acceptance of SC2/Lupin/MS5 loss (KS4+TDC2 from batch5 on KI are canonical going forward). Storage 54% → 52% used, free 14.16 TiB.
@@ -34,7 +41,7 @@ was done, when, and roughly why — without spelunking through git log.
 - [Claude] Verified batch4 results fully on KI (16 sessions, all KS4=2/2 + TDC2=2/2, no symlinks).
 - [Claude] Verified batch6 raw not yet on Dardel — upload from dmc-spike not started or not yet landed.
 - [Claude] Created this OPERATIONS_LOG.md.
-- [Anil] Copied batch 6 data onto dardel.
+
 
 
 ## 2026-06-16

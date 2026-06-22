@@ -185,6 +185,49 @@ else
     rm -f "${OUT_TMP}"
     echo "Wrote: ${OUT}"
 fi
+
+# ── Probe-level CSV (per-probe completeness on KI) ───────────────────────────
+# One row per imec probe found in KI processed results. Useful for spotting
+# which specific probes failed which step, beyond the session-level summary.
+if [ "${OUT}" != "-" ]; then
+    PROBE_OUT="${OUT%.csv}_probes.csv"
+    PROBE_TMP="/tmp/_pfc_probes.$$"
+    echo "[scan] per-probe completeness ..." >&2
+    {
+        echo "session,probe,animal,ks4_ok,tdc2_ok,consensus_ok,clean_ks4_units,clean_tdc2_units,n_warnings,warning_files"
+        find "${KI_PROC}" -maxdepth 2 -type d -name '*_imec*' 2>/dev/null | sort | while read -r probe; do
+            sid=$(basename "$(dirname "${probe}")")
+            pname=$(basename "${probe}")
+            animal="${sid%%_*}"
+            ks4_ok=$([ -f "${probe}/advanced_curation_kilosort4.json" ] && echo Y || echo N)
+            tdc2_ok=$([ -f "${probe}/advanced_curation_tridesclous2.json" ] && echo Y || echo N)
+            cons_ok=$([ -f "${probe}/consensus_clean.json" ] && echo Y || echo N)
+            # Try to read unit counts from the JSONs (fast, no Python needed)
+            if [ "${ks4_ok}" = Y ]; then
+                ks4_units=$(grep -oE '"n_clean_units":[ ]*[0-9]+' "${probe}/advanced_curation_kilosort4.json" 2>/dev/null | head -1 | grep -oE '[0-9]+$')
+                ks4_units=${ks4_units:-?}
+            else
+                ks4_units=""
+            fi
+            if [ "${tdc2_ok}" = Y ]; then
+                tdc2_units=$(grep -oE '"n_clean_units":[ ]*[0-9]+' "${probe}/advanced_curation_tridesclous2.json" 2>/dev/null | head -1 | grep -oE '[0-9]+$')
+                tdc2_units=${tdc2_units:-?}
+            else
+                tdc2_units=""
+            fi
+            warn_files=$(ls "${probe}"/*.WARNING 2>/dev/null | xargs -n1 basename 2>/dev/null | paste -sd';' -)
+            n_warn=$(echo -n "${warn_files}" | grep -c .)
+            echo "${sid},${pname},${animal},${ks4_ok},${tdc2_ok},${cons_ok},${ks4_units},${tdc2_units},${n_warn},${warn_files}"
+        done
+        echo "# Generated $(date '+%Y-%m-%d %H:%M')"
+        echo "# Columns: clean_ks4_units / clean_tdc2_units = unit count after advanced_curate noise+merge"
+        echo "# n_warnings = count of advanced_curation_<sorter>.WARNING sentinel files in probe dir"
+    } > "${PROBE_TMP}"
+    cat "${PROBE_TMP}" > "${PROBE_OUT}"
+    rm -f "${PROBE_TMP}"
+    echo "Wrote: ${PROBE_OUT}"
+fi
+
 echo
-echo "Preview:"
+echo "Preview (session-level):"
 column -s, -t < "${OUT}" 2>/dev/null | head -60
