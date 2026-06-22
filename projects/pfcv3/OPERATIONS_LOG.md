@@ -28,10 +28,16 @@ was done, when, and roughly why — without spelunking through git log.
 
 ## 2026-06-22
 
+- [Claude] Added 1033996 (904 GB raw, 4 days complete) to `Joana/ephys_batch6/` staging. Batch6 is now 6 animals: 1021218, 1053833, 1060138, 1031913, 1060360, 1033996 (~6.5 TB raw total). Anil chose 1033996 over 1061234 because it's the newest "complete" animal (4 days).
+- [Claude] Deleted `pfcv2/` (292 GB; 999770_day1 SC2+Lupin+MS5) and `pfcv3/` (446 GB; 986169 d1+d2 TDC2+SC2+Lupin) from Dardel — user-confirmed acceptance of SC2/Lupin/MS5 loss (KS4+TDC2 from batch5 on KI are canonical going forward). Storage 54% → 52% used, free 14.16 TiB.
 - [Claude] Verified all 22 sessions (16 batch4 + 6 batch5) backed up to KI byte-for-byte; deleted `pfcv3-batch4/` (4.0 TB) and `pfcv3-batch5/` (1.5 TB) from Dardel. Storage 73% → 54% used, 8 TiB → 13.4 TiB free. Headroom for ~10 more animals in batch6 + future cohort if streaming (upload→process→rsync→delete).
 - [Claude] Verified batch4 results fully on KI (16 sessions, all KS4=2/2 + TDC2=2/2, no symlinks).
 - [Claude] Verified batch6 raw not yet on Dardel — upload from dmc-spike not started or not yet landed.
 - [Claude] Created this OPERATIONS_LOG.md.
+
+
+
+
 
 ## 2026-06-16
 
