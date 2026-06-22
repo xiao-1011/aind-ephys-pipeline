@@ -28,6 +28,7 @@ was done, when, and roughly why — without spelunking through git log.
 
 ## 2026-06-22
 
+- [Claude] Verified all 22 sessions (16 batch4 + 6 batch5) backed up to KI byte-for-byte; deleted `pfcv3-batch4/` (4.0 TB) and `pfcv3-batch5/` (1.5 TB) from Dardel. Storage 73% → 54% used, 8 TiB → 13.4 TiB free. Headroom for ~10 more animals in batch6 + future cohort if streaming (upload→process→rsync→delete).
 - [Claude] Verified batch4 results fully on KI (16 sessions, all KS4=2/2 + TDC2=2/2, no symlinks).
 - [Claude] Verified batch6 raw not yet on Dardel — upload from dmc-spike not started or not yet landed.
 - [Claude] Created this OPERATIONS_LOG.md.
