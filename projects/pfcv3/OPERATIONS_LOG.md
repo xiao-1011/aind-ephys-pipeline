@@ -34,9 +34,7 @@ was done, when, and roughly why — without spelunking through git log.
 - [Claude] Verified batch4 results fully on KI (16 sessions, all KS4=2/2 + TDC2=2/2, no symlinks).
 - [Claude] Verified batch6 raw not yet on Dardel — upload from dmc-spike not started or not yet landed.
 - [Claude] Created this OPERATIONS_LOG.md.
-
-
-
+- [Anil] Copied batch 6 data onto dardel.
 
 
 ## 2026-06-16
