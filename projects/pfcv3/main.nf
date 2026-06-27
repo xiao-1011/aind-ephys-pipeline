@@ -100,6 +100,13 @@ process SORT_KS4_BATCH {
         ln -s \$(readlink -f preproc_\$((i + 1))) probe_\${i}/preprocessed
     done
 
+    # GH200 cuFFT race-condition guard: when SLURM hands the node to a new
+    # KS4_BATCH within ~7s of a previous one ending, the previous tenant's
+    # CUDA/cuFFT context hasn't drained and the first FFT call dies with
+    # CUFFT_INTERNAL_ERROR (~41-42s wall time, all 4 parallel sorts).
+    # See OPERATIONS_LOG 2026-06-26 for the sacct-based root cause.
+    sleep 60
+
     # Run all sorts in parallel — one GPU per probe
     pids=()
     for i in \$(seq 0 \$((${n} - 1))); do

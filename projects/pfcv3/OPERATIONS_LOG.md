@@ -26,6 +26,42 @@ was done, when, and roughly why — without spelunking through git log.
 
 ---
 
+## 2026-06-26
+- [Claude] Batch6 retry #3 (job 21762094) — both stubborn sessions (1031913_day3, 1033996_day1) completed clean (KS4=2/TDC2=2/cons=2/warn=0). Theory confirmed: KS4_BATCH job 21762120 ran for 1h05m on nid002893 with no back-to-back tenancy.
+- [Claude] **Implemented Option-1 fix for the cuFFT race**: added `sleep 60` at the start of `SORT_KS4_BATCH` script in `projects/pfcv3/main.nf`, before the 4 parallel KS4 launches, with a comment explaining the root cause. Cost: ~60s per KS4_BATCH job. Patched on workstation + mirrored to Dardel repo via Python sed. Applies to all future KS4 batches; no in-flight job affected (none running). Not propagated yet to pfcv2/multishankv2 mains (those use the same pattern but aren't in active rotation).
+- **[Claude] ROOT CAUSE of cuFFT_INTERNAL_ERROR on KS4 retries — IDENTIFIED.** From `sacct`: every failed KS4_BATCH job started **within 3–7 seconds** of a previous KS4_BATCH job ending on the SAME GH200 node, and died at 41–42s wall time (= cold start + first FFT call). Every successful job either started fresh on a node or ran for hours. Same node (nid002891, nid002897, nid002893) both fails AND succeeds at different times — proving it's not a bad-node issue. **It's a race condition in the GH200 GPU / cuFFT teardown-then-init sequence**: when SLURM hands the GPU to a new tenant within seconds, the previous tenant's CUDA context / cuFFT plan-cache hasn't drained, and the new container's first FFT call hits the stale state. Fix options (cheapest first): (1) `sleep 60` at start of `SORT_KS4_BATCH`, (2) explicit `torch.cuda.empty_cache()` + `cuda.synchronize()` in 02-sort.py, (3) `#SBATCH --exclusive` on KS4 to prevent same-node back-to-back tenancy. **No code change yet** — first see if retry #3 lands on a clean node by chance.
+- [Claude] Submitted batch6 3rd KS4 retry as **job 21762094**. Narrowed staging to only the 2 stubborn sessions (1031913_day3 + 1033996_day1) by moving 1031913_day1/day2 to `ephys_batch6_done/` (those 2 got fixed in retry #2). Shortened wall time `3-12:00` → `1-12:00` because cluster maintenance starts Mon 2026-06-29 and `Reserved for maintenance` blocked the 3.5d submit. Job 21762064 cancelled before that bump. Same KS4_BATCH grouping as before; hoping for different GPU node assignment to break the cuFFT determinism.
+- [Claude] Started new rsync (tmux `rsync_more_animals`, log `/tmp/rsync_more_animals.log`) for 5 animals: 1061233 (resume from 318 GB partial), 1061234, 1060148, 1053835, 1060358. ~6 TB total. Fits in 11.4 TB headroom after cleanup. 1061220 already complete on Dardel (mtimes Jun 5/12 — uploaded previously, byte-perfect KI match), so excluded from this rsync.
+- [Claude] Freed ~11.4 TB on Dardel by deleting raw of 11 pre-batch6 already-done animals (1020227, 1021219, 1031912, 1033993, 1033999, 1038513, 986167, 986168, 986170, 986171, 986235). All 11 verified KI=Dardel byte-for-byte before delete (file counts + total bytes identical). Storage went 29.30/29.30 TiB (100%) → 17.94/29.30 TiB (61%). `df` lagged showing 100%; `projinfo` showed the real 61%.
+- [Claude] Discovered Dardel storage HIT QUOTA (29.30/29.30 TiB) — the 1061233+1061220 rsync died at 51% through 1061233 with `error in file IO (code 11)`. Job 21722964 finished at 01:51 AM successfully before the squeeze. Tmux session `rsync_61233_61220` died with it.
+- [Claude] Batch6 KS4 retry result: 2 of 4 broken sessions fixed (1031913_day1, 1031913_day2). The OTHER 2 in the same KS4_BATCH (1031913_day3 + 1033996_day1) failed again with cuFFT_INTERNAL_ERROR. Same batch, same node-affinity pattern. Need a third retry — likely split that batch into single-session KS4 jobs, or pin to a different GPU node, to break the determinism.
+
+## 2026-06-25 (evening)
+- [Anil] from dmc-spikeinterfae
+rsync -aL --partial --append-verify --info=progress2 --bwlimit=30M \
+    --exclude='nextflow/' --exclude='*.tmp' \
+    -e "ssh -c aes128-gcm@openssh.com -o Compression=no" \
+    dardelcopy:/cfs/klemming/projects/supr/dmclab/ephys-pipeline-output/pfcv3-batch6/results/ \
+    /mnt/smb/dmclab/Joana/PFC-Str_behavior_project/Analysis/ephys-pipeline-output/results/
+
+
+- [Claude] Started rsync of next batch raw (1061233 + 1061220, 2.5 TB total) from **this workstation** to Dardel (not dmc-spike this time) via tmux session `rsync_61233_61220`. Log: `/tmp/rsync_61233_61220.log`. ~24h wall at 30 MB/s. 1061234 (3 days) and 1060148 (2 days) skipped — not 4 days yet. Post-upload Dardel will be ~24/29.3 TiB (~82%); must free batch6 results before next processing batch.
+```
+rsync -av --partial --info=progress2 --bwlimit=30M \
+    -e "ssh -c aes128-gcm@openssh.com -o Compression=no" \
+    /mnt/dmclab/Joana/PFC-Str_behavior_project/Recordings/Raw_data/1061233 \
+    /mnt/dmclab/Joana/PFC-Str_behavior_project/Recordings/Raw_data/1061220 \
+    dardelcopy:/cfs/klemming/projects/supr/dmclab/Joana/Raw_data/
+```
+- [Claude] Cancelled 21722815 (also cancelled 2 orphan GPU jobs 21722829/30 that survived orchestrator SIGKILL). Moved 19 successful sessions out of `ephys_batch6/` → `ephys_batch6_done/`, leaving only the 4 broken (1031913_day1/2/3 + 1033996_day1) in staging. Resubmitted as **job 21722964** — same script (with `-resume`), but now Nextflow only schedules ~46 tasks for the 4 broken sessions (cache-hits PREPROCESS/SORT_TDC2/ANALYZE_TDC2 for these 4). After completion: restore the 19 symlinks from `ephys_batch6_done/` for future status scans.
+- [Claude] Resubmitted batch6 with `-resume` (job 21722815) to retry the 2 KS4_BATCH tasks that hit `cuFFT_INTERNAL_ERROR` on GH200. Reason: `Priority` (normal queue).
+- **CAVEAT** observed on this resume: ALL 92 ADVANCED_CURATE tasks re-ran, not just downstream of the failed KS4 batches. Root cause: ADVANCED_CURATE has `path(analyzer_dir)` as BOTH input AND output — `07-advanced-curate.py` writes bombcell/unitrefine/passing_qc JSONs into the analyzer dir, mutating its hash. On `-resume` Nextflow re-hashes the (now-mutated) analyzer_dir and sees it differs from the original cached input hash → cache miss → re-run. COMPARE/COMPARE_CLEAN/CONSENSUS_DELTA cascade for the same reason. Cost: ~46 corehours, ~2.5h wall on 20 parallel slots — small but wasteful. Outputs deterministic (idempotent), so it's not incorrect, just redundant. Future fix: refactor ADVANCED_CURATE to publish JSONs separately rather than mutate the analyzer_dir.
+- [Claude] Batch6 job 21710205 COMPLETED in 8h23m, but 4 sessions had KS4 fail (cuFFT_INTERNAL_ERROR on GH200): all 3 days of 1031913 + 1033996_day1. TDC2 ran fine for all. Other 19/23 sessions fully complete (KS4=2 + TDC2=2 + consensus=2, no WARNINGs).
+
+## 2026-06-25
+- [Claude] Submitted batch6 (job 21710205). 23 sessions: 1021218 (4d) + 1031913 (3d) + 1033996 (4d) + 1053833 (4d) + 1060138 (4d) + 1060360 (4d). Shortened orchestrator `-t` from `7-00:00:00` → `3-12:00:00` so it fits before the 2026-06-29 cluster maintenance window — a prior submit (job 21710199) was blocked by `Reserved for maintenance`; the shorter wall time changed reason to `Priority` (normal queue). Cancelled 21710199. Will resubmit with `-resume` after maintenance to finish whatever doesn't complete in 3.5 days.
+- [Claude] Storage check before submit: 21.5/29.3 TiB used (73%), 7.9 TiB free; batch6 raw is 6.5 TB on Dardel. Removed broken symlink `ephys_batch6/1031913_day4_g0` (animal has only 3 days on KI raw); staging now has 23 valid symlinks.
+
 ## 2026-06-22
 - [Claude] Extended `pfcv3_status.sh` to emit a probe-level companion CSV (`PFC_STATUS_probes.csv`) alongside the session-level one. Columns: `session, probe, animal, ks4_ok, tdc2_ok, consensus_ok, clean_ks4_units, clean_tdc2_units, n_warnings, warning_files`. Unit counts pulled from `advanced_curation_*.json`. First run: 97 probes, 90 all-OK, 7 incomplete (1× known 0-unit case on 1033993_day1_imec1; 6× batch3-era probes missing `consensus_clean.json`: 986168 d1/d3 imec1, 986171 d3 imec0, 986235 d2 imec0/imec1, 986235 d3 imec1).
 - [Anil] Copied batch 6 data onto dardel.
