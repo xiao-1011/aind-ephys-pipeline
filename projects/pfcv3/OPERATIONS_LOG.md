@@ -26,6 +26,17 @@ was done, when, and roughly why — without spelunking through git log.
 
 ---
 
+## 2026-07-02
+- [Anil] Dardel back up after 2026-06-29 → 07-05 CPE / OS maintenance (partial reopen at 07-02).
+- [Claude] Container smoke test on `gpugh` partition passed: KS4 SIF loads, torch+CUDA+cuFFT work on GH200 (driver 580.173.02, CUDA 13.0), Kilosort 4.0.38 loads. FFT at N=65536, 262144, 524288 all OK. CPU SIF is x86-only — only relevant on shared partition where it works fine (spikeinterface 0.103.0 imports).
+- [Claude] Post-maintenance module names: compute nodes (both x86 shared and ARM gpugh) still expose the pre-maintenance modules (`PDC/24.11`, `apptainer/1.4.0-cpeGNU-24.11`, `miniconda3/25.3.1-1-cpeGNU-24.11`), so submit scripts DO NOT need module bumps. Login node offers `PDC/26.03` etc. but that would break on compute nodes. Wrapper `pipeline/bin_gh200/apptainer` hardcodes `/pdc/software/eb/software/apptainer/1.4.4/bin/apptainer` which still exists on ARM compute nodes — verified.
+- [Claude] Set up 2026-07-02 batch7 tracking infrastructure:
+  1. Added `Analysis/PFC_DARDEL_TIMELINE.csv` — append-only event log (columns: `date,action,scope,animal,batch,notes`; action = uploaded|deleted|processed|synced_to_ki). Backfilled from this OPERATIONS_LOG.
+  2. Extended `pfcv3_status.sh` — session-level CSV now has two extra columns: `dardel_raw_upload_date` (from dir mtime on Dardel) and `dardel_raw_last_delete_date` (from latest 'deleted' event in the timeline CSV for that animal).
+  3. Added `projects/pfcv3/log_dardel_event.sh` — tiny helper to safely append rows: `log_dardel_event.sh <action> <scope> <animal|-> <batch|-> "notes"`. Use it every time we rsync or rm anything in Joana/Raw_data or ephys-pipeline-output.
+- [Claude] Eligible batch7 candidates (already on Dardel, awaiting processing): 1053835, 1060148, 1060358, 1061220, 1061233, 1061234 — 6 animals, ~7.5 TB raw. Plus 999770_day1 (single day for a MIXED animal) is on KI but not on Dardel. No newly-4-days-complete animals since 2026-06-26.
+- [Claude] Delete candidates on Dardel (not deleted yet — user holding): batch6 raw for 1021218, 1031913, 1033996, 1053833, 1060138, 1060360 (~6.5 TB); and `pfcv3-batch6/` results dir (~6.3 TB) — all 23 sessions verified byte-perfect on KI with KS4=2/TDC2=2/cons=2. Storage 23.58 TiB (80%) → ~11 TiB (~38%) after cleanup.
+
 ## 2026-06-26
 - [Claude] Batch6 retry #3 (job 21762094) — both stubborn sessions (1031913_day3, 1033996_day1) completed clean (KS4=2/TDC2=2/cons=2/warn=0). Theory confirmed: KS4_BATCH job 21762120 ran for 1h05m on nid002893 with no back-to-back tenancy.
 - [Claude] **Implemented Option-1 fix for the cuFFT race**: added `sleep 60` at the start of `SORT_KS4_BATCH` script in `projects/pfcv3/main.nf`, before the 4 parallel KS4 launches, with a comment explaining the root cause. Cost: ~60s per KS4_BATCH job. Patched on workstation + mirrored to Dardel repo via Python sed. Applies to all future KS4 batches; no in-flight job affected (none running). Not propagated yet to pfcv2/multishankv2 mains (those use the same pattern but aren't in active rotation).

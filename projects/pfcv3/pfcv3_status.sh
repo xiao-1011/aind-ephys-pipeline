@@ -37,14 +37,15 @@ echo "  found ${#KI_SESSIONS[@]} sessions in KI raw" >&2
 # Pull Dardel state in one ssh round-trip
 echo "[scan] Dardel raw + processed ..." >&2
 DARDEL_DATA=$(ssh dardel "
-# Raw
+# Raw — emit sid, animal-dir mtime (used as approx upload date)
 for animal_dir in ${DARDEL_RAW}/*/; do
     [ -d \$animal_dir ] || continue
+    animal_mtime=\$(stat -c '%y' \$animal_dir 2>/dev/null | cut -d' ' -f1)
     for sess in \$animal_dir/*_g[0-9]*; do
         [ -d \$sess ] || continue
         sname=\$(basename \$sess)
         case \$sname in *_imec*) continue ;; esac
-        echo \"RAW \$sname\"
+        echo \"RAW \$sname \$animal_mtime\"
     done
 done
 # Processed (any pfcv* batch)
@@ -66,13 +67,15 @@ for batch in ${DARDEL_PROC_BASE}/pfcv*/results; do
 done
 " 2>/dev/null)
 
-declare -A DARDEL_RAW_HAS DARDEL_PROC_COUNT DARDEL_PROC_BATCH
+declare -A DARDEL_RAW_HAS DARDEL_RAW_UPLOAD_DATE DARDEL_PROC_COUNT DARDEL_PROC_BATCH
 while IFS= read -r line; do
     [ -z "${line}" ] && continue
     kind=$(echo "${line}" | awk '{print $1}')
     if [ "${kind}" = "RAW" ]; then
         sid=$(echo "${line}" | awk '{print $2}')
+        upl=$(echo "${line}" | awk '{print $3}')
         DARDEL_RAW_HAS[$sid]=1
+        DARDEL_RAW_UPLOAD_DATE[$sid]=$upl
     elif [ "${kind}" = "PROC" ]; then
         sid=$(echo "${line}" | awk '{print $2}')
         batch=$(echo "${line}" | awk '{print $3}')
@@ -85,6 +88,27 @@ while IFS= read -r line; do
         fi
     fi
 done <<< "$DARDEL_DATA"
+
+# Read most-recent 'deleted' event per animal from the timeline CSV, if it exists.
+# The CSV lives next to PFC_STATUS.csv at:
+#   /mnt/dmclab/Joana/PFC-Str_behavior_project/Analysis/PFC_DARDEL_TIMELINE.csv
+# Columns: date,action,scope,animal,batch,notes
+declare -A DARDEL_LAST_DELETE_DATE
+TIMELINE_CSV="/mnt/dmclab/Joana/PFC-Str_behavior_project/Analysis/PFC_DARDEL_TIMELINE.csv"
+if [ -f "${TIMELINE_CSV}" ]; then
+    while IFS=, read -r date action scope animal rest; do
+        [ "${date:0:1}" = "#" ] && continue
+        [ "${date}" = "date" ] && continue
+        [ "${action}" = "deleted" ] || continue
+        [ "${scope}" = "animal" ] || continue
+        [ -z "${animal}" ] && continue
+        # keep the latest date per animal
+        prev=${DARDEL_LAST_DELETE_DATE[$animal]:-}
+        if [ -z "${prev}" ] || [[ "${date}" > "${prev}" ]]; then
+            DARDEL_LAST_DELETE_DATE[$animal]=$date
+        fi
+    done < "${TIMELINE_CSV}"
+fi
 
 count_ki_processed() {
     # echo "<count> <expected>" where expected = number of probe dirs that exist on KI raw
@@ -102,7 +126,7 @@ count_ki_processed() {
 
 OUT_TMP="/tmp/_pfc_status.$$"
 {
-    echo "session,animal,raw_size,raw_size_gb,n_probes,raw_on_ki,raw_on_dardel,ki_processed,dardel_processed,ki_batch,dardel_batch,status,notes"
+    echo "session,animal,raw_size,raw_size_gb,n_probes,raw_on_ki,raw_on_dardel,dardel_raw_upload_date,dardel_raw_last_delete_date,ki_processed,dardel_processed,ki_batch,dardel_batch,status,notes"
 
     total=0; on_ki=0; on_dardel_only=0; partial=0; pending=0
     for sess_dir in "${KI_SESSIONS[@]}"; do
@@ -166,13 +190,17 @@ OUT_TMP="/tmp/_pfc_status.$$"
             notes="not yet processed"
         fi
 
-        echo "${sid},${animal},${sz},${sz_gb},${n_probes},${raw_on_ki},${raw_on_dardel},${ki_c}/${n_probes},${dardel_c}/${n_probes},${ki_batch},${dardel_batch},${status},${notes}"
+        upload_date=${DARDEL_RAW_UPLOAD_DATE[$sid]:-}
+        last_delete_date=${DARDEL_LAST_DELETE_DATE[$animal]:-}
+        echo "${sid},${animal},${sz},${sz_gb},${n_probes},${raw_on_ki},${raw_on_dardel},${upload_date},${last_delete_date},${ki_c}/${n_probes},${dardel_c}/${n_probes},${ki_batch},${dardel_batch},${status},${notes}"
     done
 
     echo "# Generated $(date '+%Y-%m-%d %H:%M')"
     echo "# Summary: ${total} sessions; ${on_ki} fully on KI; ${on_dardel_only} only on Dardel (need sync); ${partial} partial; ${pending} pending"
     echo "# Status values: on_ki | on_dardel_only | partial | pending"
     echo "# Columns: ki_processed and dardel_processed = N/<n_probes> probes with advanced_curation_kilosort4.json"
+    echo "# dardel_raw_upload_date = mtime of animal dir on Dardel (approx last rsync); empty if not on Dardel now"
+    echo "# dardel_raw_last_delete_date = most recent 'deleted' animal event from PFC_DARDEL_TIMELINE.csv; empty if never deleted or CSV absent"
     echo "# Paths: raw=${KI_RAW}/<animal>/<sid>/; ki_proc=${KI_PROC}/<sid>/; dardel_raw=${DARDEL_RAW}/<animal>/<sid>/; dardel_proc=${DARDEL_PROC_BASE}/<batch>/results/<sid>/"
 } > "${OUT_TMP}"
 
