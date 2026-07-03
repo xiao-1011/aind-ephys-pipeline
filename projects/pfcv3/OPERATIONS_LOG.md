@@ -26,6 +26,10 @@ was done, when, and roughly why — without spelunking through git log.
 
 ---
 
+## 2026-07-03
+- [Claude] Prepared batch7: staged `Joana/ephys_batch7/` with 24 valid symlinks (6 animals × 4 days: 1053835, 1060148, 1060358, 1061220, 1061233, 1061234). Cloned `slurm_submit_batch6.sh` → `slurm_submit_batch7.sh` (workstation + Dardel). Wall time restored to `3-12:00:00` (maintenance done). Ready to submit: `cd /cfs/klemming/projects/supr/dmclab/aind-ephys-pipeline-pfc/projects/pfcv3 && sbatch slurm_submit_batch7.sh`.
+- [Claude] Batch6 partial cleanup: byte-verified 5 raws (1021218, 1031913, 1053833, 1060138, 1060360) as KI=Dardel identical, then deleted them. Also deleted `pfcv3-batch6/work/` (all) and 19 non-1033996 session dirs under `pfcv3-batch6/results/`. **Kept: 1033996 raw + 1033996_day1-4 results.** Storage 23.58 TiB (80%) → 12.62 TiB (43%), freed ~11 TB. Batch7 will fit comfortably. All 6 deletes logged via `log_dardel_event.sh` to `PFC_DARDEL_TIMELINE.csv`.
+
 ## 2026-07-02
 - [Anil] Dardel back up after 2026-06-29 → 07-05 CPE / OS maintenance (partial reopen at 07-02).
 - [Claude] Container smoke test on `gpugh` partition passed: KS4 SIF loads, torch+CUDA+cuFFT work on GH200 (driver 580.173.02, CUDA 13.0), Kilosort 4.0.38 loads. FFT at N=65536, 262144, 524288 all OK. CPU SIF is x86-only — only relevant on shared partition where it works fine (spikeinterface 0.103.0 imports).
