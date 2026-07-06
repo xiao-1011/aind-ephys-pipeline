@@ -26,6 +26,10 @@ was done, when, and roughly why — without spelunking through git log.
 
 ---
 
+## 2026-07-06
+- [Claude] Batch7 orchestrator (job 22009658) COMPLETED cleanly in 1d10h. 21/24 sessions fully done. **3 failures, all on 1061234**: (1) `PREPROCESS 1061234_day2_g0_imec0` TIMED OUT at 1h51m (SLURM SIGTERM, exit 140), left day2 with only imec1 in results; (2) `SORT_KS4_BATCH [1061234_day3+day4]` (job 22013115) hit cuFFT_INTERNAL_ERROR at 1m44s on nid002897 — same back-to-back-tenancy pattern as before, but this time `sleep 60` was not enough (60s sleep + 44s KS4 = 104s). None of the failures are allocation/fairshare related — those only affect queue wait time, not job execution.
+- [Claude] **Bumped cuFFT race guard**: `main.nf` SORT_KS4_BATCH: `sleep 60 → 120`, plus added `nvidia-smi > /dev/null` warmup after the sleep to force GPU/CUDA context init before the 4 parallel Python processes hit cuFFT. Mirrored to Dardel.
+
 ## 2026-07-03
 - [Claude] Prepared batch7: staged `Joana/ephys_batch7/` with 24 valid symlinks (6 animals × 4 days: 1053835, 1060148, 1060358, 1061220, 1061233, 1061234). Cloned `slurm_submit_batch6.sh` → `slurm_submit_batch7.sh` (workstation + Dardel). Wall time restored to `3-12:00:00` (maintenance done). Ready to submit: `cd /cfs/klemming/projects/supr/dmclab/aind-ephys-pipeline-pfc/projects/pfcv3 && sbatch slurm_submit_batch7.sh`.
 - [Claude] Batch6 partial cleanup: byte-verified 5 raws (1021218, 1031913, 1053833, 1060138, 1060360) as KI=Dardel identical, then deleted them. Also deleted `pfcv3-batch6/work/` (all) and 19 non-1033996 session dirs under `pfcv3-batch6/results/`. **Kept: 1033996 raw + 1033996_day1-4 results.** Storage 23.58 TiB (80%) → 12.62 TiB (43%), freed ~11 TB. Batch7 will fit comfortably. All 6 deletes logged via `log_dardel_event.sh` to `PFC_DARDEL_TIMELINE.csv`.

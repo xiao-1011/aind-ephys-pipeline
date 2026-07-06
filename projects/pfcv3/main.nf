@@ -105,7 +105,12 @@ process SORT_KS4_BATCH {
     # CUDA/cuFFT context hasn't drained and the first FFT call dies with
     # CUFFT_INTERNAL_ERROR (~41-42s wall time, all 4 parallel sorts).
     # See OPERATIONS_LOG 2026-06-26 for the sacct-based root cause.
-    sleep 60
+    # 2026-07-06: bumped 60 -> 120 after batch7 22013115 still failed at 104s
+    # (60s sleep + 44s KS4 attempt). Plus explicit nvidia-smi warmup below to
+    # force GPU/CUDA context init before the 4 parallel Python processes hit
+    # cuFFT at the same time.
+    sleep 120
+    nvidia-smi > /dev/null 2>&1 || true
 
     # Run all sorts in parallel — one GPU per probe
     pids=()
