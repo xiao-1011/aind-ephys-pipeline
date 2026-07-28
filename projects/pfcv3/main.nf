@@ -109,7 +109,11 @@ process SORT_KS4_BATCH {
     # (60s sleep + 44s KS4 attempt). Plus explicit nvidia-smi warmup below to
     # force GPU/CUDA context init before the 4 parallel Python processes hit
     # cuFFT at the same time.
-    sleep 120
+    # 2026-07-28: bumped 120 -> 180 after batch8 22238986 still failed. Plus
+    # errorStrategy='retry' on cuFFT-style exit 1 in nextflow.config (one
+    # auto-retry from Nextflow rescheduling on a fresh node instead of relying
+    # solely on the sleep to guarantee cache drain).
+    sleep 180
     nvidia-smi > /dev/null 2>&1 || true
 
     # Run all sorts in parallel — one GPU per probe
