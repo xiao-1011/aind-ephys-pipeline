@@ -124,10 +124,17 @@ process SORT_KS4_BATCH {
         pids+=(\$!)
     done
 
-    # Wait for all — fail if any fail
+    # Wait for all — fail if ANY child fails.
+    # 2026-07-29: previously this loop just called \`wait \$pid\` in sequence — the
+    # LAST wait's return code became the script's exit code. If probe 3 failed
+    # (cuFFT) but probe 4 succeeded, the whole job reported exit 0 → Nextflow
+    # treated it as success → auto-retry NEVER triggered. Batch8 22261435 hit
+    # this: 1060141_day1_imec? failed silently, session ended with KS4=1.
+    fail=0
     for pid in "\${pids[@]}"; do
-        wait \$pid
+        wait \$pid || fail=1
     done
+    [ \$fail -eq 0 ] || exit 1
     """
 }
 
