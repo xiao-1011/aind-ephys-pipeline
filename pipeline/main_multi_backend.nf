@@ -36,15 +36,29 @@ clone_repo() {
 '''
 }
 
-def jsonArguments(jsonSection) {
-    return jsonSection
-        ? "--params '${groovy.json.JsonOutput.toJson(jsonSection)}'"
-        : ''
-}
-
 def stringParameter(pipelineParams, name) {
     def value = pipelineParams[name]
     return value instanceof String ? value : ''
+}
+
+def buildStepArguments(jsonSection, pipelineParams, cliParameterName) {
+    def arguments = jsonSection ? new LinkedHashMap(jsonSection) : [:]
+    def cliArguments = stringParameter(pipelineParams, cliParameterName).trim()
+
+    if (cliArguments) {
+        cliArguments.split(/\s+(?=--)/).each { segment ->
+            def tokens = segment.trim().split(/\s+/, 2)
+            if (tokens[0].startsWith('--')) {
+                def key = tokens[0].substring(2).replace('-', '_')
+                def value = tokens.size() > 1 ? tokens[1] : true
+                arguments[key] = value
+            }
+        }
+    }
+
+    return arguments
+        ? "--params '${groovy.json.JsonOutput.toJson(arguments)}'"
+        : ''
 }
 
 def buildSettings(pipelineParams) {
@@ -59,40 +73,44 @@ def buildSettings(pipelineParams) {
         ? new groovy.json.JsonSlurper().parseText(new File(pipelineParams.params_file.toString()).text)
         : [:]
 
+    def defaultVersionsFile = new File(pipelineParams.capsule_versions.toString())
+    def customVersionsFile = new File(defaultVersionsFile.parent, 'capsule_versions_custom.env')
+    def versionsFile = customVersionsFile.exists() ? customVersionsFile : defaultVersionsFile
     def versions = [:]
-    new File(pipelineParams.capsule_versions.toString()).eachLine { line ->
-        def (key, value) = line.tokenize('=')
-        versions[key] = value
+    versionsFile.eachLine { line ->
+        if (line.contains('=')) {
+            def separator = line.indexOf('=')
+            def key = line.substring(0, separator).trim()
+            def value = line.substring(separator + 1).trim().replaceAll("^[\"']|[\"']\$", '')
+            versions[key] = value
+        }
     }
     settings.versions = versions
     settings.container_tag = "si-${versions['SPIKEINTERFACE_VERSION']}"
+
+    def extraInstalls = versions['EXTRA_INSTALLS'] ?: ''
+    def extraInstallList = extraInstalls
+        ? extraInstalls.split(',').collect { packageName -> packageName.trim() }.findAll { packageName -> packageName }
+        : []
+    settings.extra_installs_cmd = extraInstallList
+        ? 'pip install ' + extraInstallList.collect { packageName -> "'${packageName}'" }.join(' ')
+        : ''
+    settings.extra_installs_echo = extraInstallList
+        ? "echo 'installing extra packages: ${extraInstallList.join(', ')}'"
+        : ''
 
     def parameterNames = pipelineParams.keySet()
     def nJobs = parameterNames.contains('n_jobs') ? pipelineParams.n_jobs : -1
     settings.job_args = settings.executor == 'local' ? " --n-jobs ${nJobs}" : ''
     settings.runmode = parameterNames.contains('runmode') ? pipelineParams.runmode : 'full'
 
-    settings.job_dispatch_args = jsonParams.job_dispatch
-        ? jsonArguments(jsonParams.job_dispatch)
-        : stringParameter(pipelineParams, 'job_dispatch_args')
-    settings.preprocessing_args = jsonParams.preprocessing
-        ? jsonArguments(jsonParams.preprocessing)
-        : stringParameter(pipelineParams, 'preprocessing_args')
-    settings.postprocessing_args = jsonParams.postprocessing
-        ? jsonArguments(jsonParams.postprocessing)
-        : stringParameter(pipelineParams, 'postprocessing_args')
-    settings.curation_args = jsonParams.curation
-        ? jsonArguments(jsonParams.curation)
-        : stringParameter(pipelineParams, 'curation_args')
-    settings.visualization_kwargs = jsonParams.visualization
-        ? jsonArguments(jsonParams.visualization)
-        : stringParameter(pipelineParams, 'visualization_kwargs')
-    settings.nwb_subject_args = jsonParams.nwb?.subject
-        ? jsonArguments(jsonParams.nwb.subject)
-        : stringParameter(pipelineParams, 'nwb_subject_args')
-    settings.nwb_ecephys_args = jsonParams.nwb?.ecephys
-        ? jsonArguments(jsonParams.nwb.ecephys)
-        : stringParameter(pipelineParams, 'nwb_ecephys_args')
+    settings.job_dispatch_args = buildStepArguments(jsonParams.job_dispatch, pipelineParams, 'job_dispatch_args')
+    settings.preprocessing_args = buildStepArguments(jsonParams.preprocessing, pipelineParams, 'preprocessing_args')
+    settings.postprocessing_args = buildStepArguments(jsonParams.postprocessing, pipelineParams, 'postprocessing_args')
+    settings.curation_args = buildStepArguments(jsonParams.curation, pipelineParams, 'curation_args')
+    settings.visualization_kwargs = buildStepArguments(jsonParams.visualization, pipelineParams, 'visualization_kwargs')
+    settings.nwb_subject_args = buildStepArguments(jsonParams.nwb?.subject, pipelineParams, 'nwb_subject_args')
+    settings.nwb_ecephys_args = buildStepArguments(jsonParams.nwb?.ecephys, pipelineParams, 'nwb_ecephys_args')
 
     settings.sorter = jsonParams.spikesorting?.sorter
         ?: stringParameter(pipelineParams, 'sorter')
@@ -100,9 +118,7 @@ def buildSettings(pipelineParams) {
     def sorterParams = jsonParams.spikesorting
         ? jsonParams.spikesorting[settings.sorter]
         : null
-    settings.spikesorting_args = sorterParams
-        ? jsonArguments(sorterParams)
-        : stringParameter(pipelineParams, 'spikesorting_args')
+    settings.spikesorting_args = buildStepArguments(sorterParams, pipelineParams, 'spikesorting_args')
 
     if (settings.runmode == 'fast') {
         settings.preprocessing_args = '--motion skip'
@@ -132,6 +148,9 @@ process job_dispatch {
     #!/usr/bin/env bash
     set -e
 
+    ${settings.extra_installs_echo}
+    ${settings.extra_installs_cmd}
+
     mkdir -p capsule
     mkdir -p capsule/data
     mkdir -p capsule/results
@@ -145,7 +164,7 @@ process job_dispatch {
 
     echo "[${task.tag}] cloning git repo..."
     ${settings.clone_function}
-    clone_repo "${settings.git_repo_prefix}ephys-job-dispatch.git" "${settings.versions['JOB_DISPATCH']}"
+    clone_repo "${settings.versions['JOB_DISPATCH_REPO']}" "${settings.versions['JOB_DISPATCH_COMMIT']}"
 
     echo "[${task.tag}] running capsule..."
     cd capsule/code
@@ -180,6 +199,9 @@ process preprocessing {
     #!/usr/bin/env bash
     set -e
 
+    ${settings.extra_installs_echo}
+    ${settings.extra_installs_cmd}
+
     mkdir -p capsule
     mkdir -p capsule/data
     mkdir -p capsule/results
@@ -187,11 +209,13 @@ process preprocessing {
 
     if [[ ${settings.executor} == "slurm" ]]; then
         echo "[${task.tag}] allocated task time: ${task.time}"
+        # Make sure N_JOBS matches allocated CPUs on SLURM
+        export N_JOBS_EXT=${task.cpus}
     fi
 
     echo "[${task.tag}] cloning git repo..."
     ${settings.clone_function}
-    clone_repo "${settings.git_repo_prefix}ephys-preprocessing.git" "${settings.versions['PREPROCESSING']}"
+    clone_repo "${settings.versions['PREPROCESSING_REPO']}" "${settings.versions['PREPROCESSING_COMMIT']}"
 
     echo "[${task.tag}] running capsule..."
     cd capsule/code
@@ -226,11 +250,13 @@ process spikesort_kilosort25 {
 
     if [[ ${settings.executor} == "slurm" ]]; then
         echo "[${task.tag}] allocated task time: ${task.time}"
+        # Make sure N_JOBS matches allocated CPUs on SLURM
+        export N_JOBS_EXT=${task.cpus}
     fi
 
     echo "[${task.tag}] cloning git repo..."
     ${settings.clone_function}
-    clone_repo "${settings.git_repo_prefix}ephys-spikesort-kilosort25.git" "${settings.versions['SPIKESORT_KS25']}"
+    clone_repo "${settings.versions['SPIKESORT_KS25_REPO']}" "${settings.versions['SPIKESORT_KS25_COMMIT']}"
 
     echo "[${task.tag}] running capsule..."
     cd capsule/code
@@ -265,11 +291,13 @@ process spikesort_kilosort4 {
 
     if [[ ${settings.executor} == "slurm" ]]; then
         echo "[${task.tag}] allocated task time: ${task.time}"
+        # Make sure N_JOBS matches allocated CPUs on SLURM
+        export N_JOBS_EXT=${task.cpus}
     fi
 
     echo "[${task.tag}] cloning git repo..."
     ${settings.clone_function}
-    clone_repo "${settings.git_repo_prefix}ephys-spikesort-kilosort4.git" "${settings.versions['SPIKESORT_KS4']}"
+    clone_repo "${settings.versions['SPIKESORT_KS4_REPO']}" "${settings.versions['SPIKESORT_KS4_COMMIT']}"
 
     echo "[${task.tag}] running capsule..."
     cd capsule/code
@@ -304,11 +332,54 @@ process spikesort_spykingcircus2 {
 
     if [[ ${settings.executor} == "slurm" ]]; then
         echo "[${task.tag}] allocated task time: ${task.time}"
+        # Make sure N_JOBS matches allocated CPUs on SLURM
+        export N_JOBS_EXT=${task.cpus}
     fi
 
     echo "[${task.tag}] cloning git repo..."
     ${settings.clone_function}
-    clone_repo "${settings.git_repo_prefix}ephys-spikesort-spykingcircus2.git" "${settings.versions['SPIKESORT_SC2']}"
+    clone_repo "${settings.versions['SPIKESORT_SC2_REPO']}" "${settings.versions['SPIKESORT_SC2_COMMIT']}"
+
+    echo "[${task.tag}] running capsule..."
+    cd capsule/code
+    chmod +x run
+    ./run ${settings.spikesorting_args} ${settings.job_args}
+
+    echo "[${task.tag}] completed!"
+    """
+}
+
+process spikesort_lupin {
+    tag 'spikesort-lupin'
+    container "ghcr.io/allenneuraldynamics/aind-ephys-pipeline-base:${settings.container_tag}"
+
+    input:
+    val settings
+    val max_duration_minutes
+    path preprocessing_results, stageAs: 'capsule/data/*'
+
+    output:
+    path 'capsule/results/*', emit: results
+
+    script:
+    """
+    #!/usr/bin/env bash
+    set -e
+
+    mkdir -p capsule
+    mkdir -p capsule/data
+    mkdir -p capsule/results
+    mkdir -p capsule/scratch
+
+    if [[ ${settings.executor} == "slurm" ]]; then
+        echo "[${task.tag}] allocated task time: ${task.time}"
+        # Make sure N_JOBS matches allocated CPUs on SLURM
+        export N_JOBS_EXT=${task.cpus}
+    fi
+
+    echo "[${task.tag}] cloning git repo..."
+    ${settings.clone_function}
+    clone_repo "${settings.versions['SPIKESORT_LUPIN_REPO']}" "${settings.versions['SPIKESORT_LUPIN_COMMIT']}"
 
     echo "[${task.tag}] running capsule..."
     cd capsule/code
@@ -339,6 +410,9 @@ process postprocessing {
     #!/usr/bin/env bash
     set -e
 
+    ${settings.extra_installs_echo}
+    ${settings.extra_installs_cmd}
+
     mkdir -p capsule
     mkdir -p capsule/data
     mkdir -p capsule/results
@@ -346,11 +420,13 @@ process postprocessing {
 
     if [[ ${settings.executor} == "slurm" ]]; then
         echo "[${task.tag}] allocated task time: ${task.time}"
+        # Make sure N_JOBS matches allocated CPUs on SLURM
+        export N_JOBS_EXT=${task.cpus}
     fi
 
     echo "[${task.tag}] cloning git repo..."
     ${settings.clone_function}
-    clone_repo "${settings.git_repo_prefix}ephys-postprocessing.git" "${settings.versions['POSTPROCESSING']}"
+    clone_repo "${settings.versions['POSTPROCESSING_REPO']}" "${settings.versions['POSTPROCESSING_COMMIT']}"
 
     echo "[${task.tag}] running capsule..."
     cd capsule/code
@@ -385,11 +461,13 @@ process curation {
 
     if [[ ${settings.executor} == "slurm" ]]; then
         echo "[${task.tag}] allocated task time: ${task.time}"
+        # Make sure N_JOBS matches allocated CPUs on SLURM
+        export N_JOBS_EXT=${task.cpus}
     fi
 
     echo "[${task.tag}] cloning git repo..."
     ${settings.clone_function}
-    clone_repo "${settings.git_repo_prefix}ephys-curation.git" "${settings.versions['CURATION']}"
+    clone_repo "${settings.versions['CURATION_REPO']}" "${settings.versions['CURATION_COMMIT']}"
 
     echo "[${task.tag}] running capsule..."
     cd capsule/code
@@ -422,6 +500,9 @@ process visualization {
     #!/usr/bin/env bash
     set -e
 
+    ${settings.extra_installs_echo}
+    ${settings.extra_installs_cmd}
+
     mkdir -p capsule
     mkdir -p capsule/data
     mkdir -p capsule/results
@@ -429,11 +510,13 @@ process visualization {
 
     if [[ ${settings.executor} == "slurm" ]]; then
         echo "[${task.tag}] allocated task time: ${task.time}"
+        # Make sure N_JOBS matches allocated CPUs on SLURM
+        export N_JOBS_EXT=${task.cpus}
     fi
 
     echo "[${task.tag}] cloning git repo..."
     ${settings.clone_function}
-    clone_repo "${settings.git_repo_prefix}ephys-visualization.git" "${settings.versions['VISUALIZATION']}"
+    clone_repo "${settings.versions['VISUALIZATION_REPO']}" "${settings.versions['VISUALIZATION_COMMIT']}"
 
     echo "[${task.tag}] running capsule..."
     cd capsule/code
@@ -471,6 +554,9 @@ process results_collector {
     #!/usr/bin/env bash
     set -e
 
+    ${settings.extra_installs_echo}
+    ${settings.extra_installs_cmd}
+
     mkdir -p capsule
     mkdir -p capsule/data
     mkdir -p capsule/results
@@ -482,7 +568,7 @@ process results_collector {
 
     echo "[${task.tag}] cloning git repo..."
     ${settings.clone_function}
-    clone_repo "${settings.git_repo_prefix}ephys-results-collector.git" "${settings.versions['RESULTS_COLLECTOR']}"
+    clone_repo "${settings.versions['RESULTS_COLLECTOR_REPO']}" "${settings.versions['RESULTS_COLLECTOR_COMMIT']}"
 
     echo "[${task.tag}] running capsule..."
     cd capsule/code
@@ -512,6 +598,9 @@ process quality_control {
     #!/usr/bin/env bash
     set -e
 
+    ${settings.extra_installs_echo}
+    ${settings.extra_installs_cmd}
+
     mkdir -p capsule
     mkdir -p capsule/data
     mkdir -p capsule/results
@@ -519,16 +608,18 @@ process quality_control {
 
     if [[ ${settings.executor} == "slurm" ]]; then
         echo "[${task.tag}] allocated task time: ${task.time}"
+        # Make sure N_JOBS matches allocated CPUs on SLURM
+        export N_JOBS_EXT=${task.cpus}
     fi
 
     echo "[${task.tag}] cloning git repo..."
     ${settings.clone_function}
-    clone_repo "${settings.git_repo_prefix}ephys-processing-qc.git" "${settings.versions['QUALITY_CONTROL']}"
+    clone_repo "${settings.versions['QUALITY_CONTROL_REPO']}" "${settings.versions['QUALITY_CONTROL_COMMIT']}"
 
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
-    ./run
+    ./run --pipeline-data-path ${settings.data_path}
 
     echo "[${task.tag}] completed!"
     """
@@ -564,51 +655,12 @@ process quality_control_collector {
 
     echo "[${task.tag}] cloning git repo..."
     ${settings.clone_function}
-    clone_repo "${settings.git_repo_prefix}ephys-qc-collector.git" "${settings.versions['QUALITY_CONTROL_COLLECTOR']}"
+    clone_repo "${settings.versions['QUALITY_CONTROL_COLLECTOR_REPO']}" "${settings.versions['QUALITY_CONTROL_COLLECTOR_COMMIT']}"
 
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
     ./run
-
-    echo "[${task.tag}] completed!"
-    """
-}
-
-process nwb_subject {
-    tag 'nwb-subject'
-    container "ghcr.io/allenneuraldynamics/aind-ephys-pipeline-nwb:${settings.container_tag}"
-
-    input:
-    val settings
-    val max_duration_minutes
-    path ecephys_session_input, stageAs: 'capsule/data/ecephys_session'
-
-    output:
-    path 'capsule/results/*', emit: results
-
-    script:
-    """
-    #!/usr/bin/env bash
-    set -e
-
-    mkdir -p capsule
-    mkdir -p capsule/data
-    mkdir -p capsule/results
-    mkdir -p capsule/scratch
-
-    if [[ ${settings.executor} == "slurm" ]]; then
-        echo "[${task.tag}] allocated task time: ${task.time}"
-    fi
-
-    echo "[${task.tag}] cloning git repo..."
-    ${settings.clone_function}
-    clone_repo "${settings.git_repo_prefix}subject-nwb.git" "${settings.versions['NWB_SUBJECT']}"
-
-    echo "[${task.tag}] running capsule..."
-    cd capsule/code
-    chmod +x run
-    ./run ${settings.nwb_subject_args}
 
     echo "[${task.tag}] completed!"
     """
@@ -632,6 +684,9 @@ process nwb_ecephys {
     #!/usr/bin/env bash
     set -e
 
+    ${settings.extra_installs_echo}
+    ${settings.extra_installs_cmd}
+
     mkdir -p capsule
     mkdir -p capsule/data
     mkdir -p capsule/results
@@ -639,11 +694,13 @@ process nwb_ecephys {
 
     if [[ ${settings.executor} == "slurm" ]]; then
         echo "[${task.tag}] allocated task time: ${task.time}"
+        # Make sure N_JOBS matches allocated CPUs on SLURM
+        export N_JOBS_EXT=${task.cpus}
     fi
 
     echo "[${task.tag}] cloning git repo..."
     ${settings.clone_function}
-    clone_repo "${settings.git_repo_prefix}ecephys-nwb.git" "${settings.versions['NWB_ECEPHYS']}"
+    clone_repo "${settings.versions['NWB_ECEPHYS_REPO']}" "${settings.versions['NWB_ECEPHYS_COMMIT']}"
 
     echo "[${task.tag}] running capsule..."
     cd capsule/code
@@ -676,6 +733,9 @@ process nwb_units {
     #!/usr/bin/env bash
     set -e
 
+    ${settings.extra_installs_echo}
+    ${settings.extra_installs_cmd}
+
     mkdir -p capsule
     mkdir -p capsule/data
     mkdir -p capsule/results
@@ -683,7 +743,7 @@ process nwb_units {
 
     echo "[${task.tag}] cloning git repo..."
     ${settings.clone_function}
-    clone_repo "${settings.git_repo_prefix}units-nwb.git" "${settings.versions['NWB_UNITS']}"
+    clone_repo "${settings.versions['NWB_UNITS_REPO']}" "${settings.versions['NWB_UNITS_COMMIT']}"
 
     if [[ ${settings.executor} == "slurm" ]]; then
         echo "[${task.tag}] allocated task time: ${task.time}"
@@ -741,6 +801,12 @@ workflow {
         )
     } else if (settings.sorter == 'spykingcircus2') {
         spikesort_out = spikesort_spykingcircus2(
+            settings,
+            max_duration_minutes,
+            preprocessing_out.results
+        )
+    } else if (settings.sorter == 'lupin') {
+        spikesort_out = spikesort_lupin(
             settings,
             max_duration_minutes,
             preprocessing_out.results

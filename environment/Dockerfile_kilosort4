@@ -1,19 +1,26 @@
-FROM spikeinterface/kilosort4-base:4.0.18_cuda-12.0.0
+FROM spikeinterface/kilosort4-base:4.1.7_cuda-12.0.0
 
 ARG DEBIAN_FRONTEND=noninteractive
 
-# Copy requirements.txt into the container
-COPY requirements.txt .
-
+# 1. Install Python packages as root so they land in the system site-packages,
+#    accessible to any user regardless of UID at runtime.
+COPY requirements.txt /tmp/requirements.txt
 RUN pip install --upgrade pip && \
-    grep -E 'aind-data-schema' requirements.txt | xargs pip install
+    grep -E 'aind-data-schema|scipy' /tmp/requirements.txt | xargs pip install
 
-# Extract the spikeinterface version and install with extras
-RUN pip install --upgrade pip && \
-    SPIKEINTERFACE_VERSION=$(grep '^spikeinterface==' requirements.txt | cut -d'=' -f3) && \
+RUN SPIKEINTERFACE_VERSION=$(grep '^spikeinterface==' /tmp/requirements.txt | cut -d'=' -f3) && \
     pip install "spikeinterface[full]==${SPIKEINTERFACE_VERSION}"
 
-# Fix for multiple channel groups: https://github.com/SpikeInterface/spikeinterface/pull/3944
-RUN git clone https://github.com/alejoe91/spikeinterface.git && cd spikeinterface && \
-    git checkout 64cee6d2be24288ef803c9a686f137105f975655 && pip install . && \
-    cd .. && rm -rf spikeinterface
+# 2. Redirect numba's JIT cache to a writable location (see Dockerfile_base for context).
+ENV NUMBA_CACHE_DIR=/tmp/numba_cache
+
+# 3. Create non-root user for runtime, with home dir writable by any UID
+#    (see Dockerfile_base for context).
+RUN useradd -m -u 1000 pipelineuser && chmod 777 /home/pipelineuser
+ENV HOME=/home/pipelineuser
+
+# 4. Setup work area
+WORKDIR /home/pipelineuser
+
+# 5. Switch to non-root user
+USER pipelineuser

@@ -2,18 +2,31 @@ FROM continuumio/miniconda3:23.9.0-0
 
 ARG DEBIAN_FRONTEND=noninteractive
 
-# Copy requirements.txt into the container
-COPY requirements.txt .
-
+# 1. Install system dependencies as root
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         build-essential \
     && rm -rf /var/lib/apt/lists/*
 
+# 2. Install Python packages as root so they land in the system (conda) site-packages,
+#    accessible to any user regardless of UID at runtime.
+COPY requirements.txt /tmp/requirements.txt
 RUN pip install --upgrade pip && \
-    grep -E 'aind-data-schema|aind-nwb-utils|hdmf-zarr|pynwb|neuroconv|wavpack-numcodecs' requirements.txt | xargs pip install
+    grep -E 'aind-data-schema|aind-nwb-utils|hdmf-zarr|pynwb|pytz|neuroconv|wavpack-numcodecs|neo' /tmp/requirements.txt | xargs pip install
 
-# Extract the spikeinterface version and install with extras
-RUN pip install --upgrade pip && \
-    SPIKEINTERFACE_VERSION=$(grep '^spikeinterface==' requirements.txt | cut -d'=' -f3) && \
+RUN SPIKEINTERFACE_VERSION=$(grep '^spikeinterface==' /tmp/requirements.txt | cut -d'=' -f3) && \
     pip install "spikeinterface[full]==${SPIKEINTERFACE_VERSION}"
+
+# 3. Redirect numba's JIT cache to a writable location (see Dockerfile_base for context).
+ENV NUMBA_CACHE_DIR=/tmp/numba_cache
+
+# 4. Create non-root user for runtime, with home dir writable by any UID
+#    (see Dockerfile_base for context).
+RUN useradd -m -u 1000 pipelineuser && chmod 777 /home/pipelineuser
+ENV HOME=/home/pipelineuser
+
+# 5. Setup work area
+WORKDIR /home/pipelineuser
+
+# 6. Switch to non-root user
+USER pipelineuser
