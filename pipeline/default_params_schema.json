@@ -354,6 +354,16 @@
                     "description": "Parameters for motion estimation and correction.",
                     "additionalProperties": false,
                     "properties": {
+                        "compute": {
+                            "type": "boolean",
+                            "default": true,
+                            "description": "Whether to estimate motion (saved to motion_{recording_name}, used for drift visualization and QC)."
+                        },
+                        "apply": {
+                            "type": "boolean",
+                            "default": false,
+                            "description": "Whether to interpolate the preprocessed traces with the estimated motion before spike sorting. If true, disable the sorter's internal drift correction (e.g. kilosort4.skip_motion_correction)."
+                        },
                         "preset": {
                             "type": "string",
                             "enum": [

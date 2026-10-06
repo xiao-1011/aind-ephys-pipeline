@@ -65,11 +65,14 @@
         },
         "custom_preprocessing_pipeline": null,
         "motion_correction": {
-            "preset": "dredge_fast",
+            "compute": true,
+            "apply": true,
+            "preset": "dredge",
             "detect_kwargs": {},
             "select_kwargs": {},
             "localize_peaks_kwargs": {},
             "estimate_motion_kwargs": {
+                "rigid": true,
                 "win_step_norm": 0.1,
                 "win_scale_norm": 0.1
             },
@@ -329,8 +332,8 @@
                 "chunk_duration": "1s",
                 "progress_bar": false
             },
-            "skip_motion_correction": false,
-            "min_drift_channels": 96,
+            "skip_motion_correction": true,
+            "min_drift_channels": 64,
             "raise_if_fails": true,
             "clear_cache": false,
             "sorter": {
