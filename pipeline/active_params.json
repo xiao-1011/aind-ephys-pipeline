@@ -225,7 +225,7 @@
             "progress_bar": false
         },
         "qc_thresholds": {
-            "rp_contamination": {"less": 0.5},
+            "rp_contamination": {"less": 0.1},
             "presence_ratio": {"greater": 0.8},
             "amplitude_cutoff": {"less": 0.1}
         },
