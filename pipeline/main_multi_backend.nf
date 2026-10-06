@@ -7,6 +7,7 @@ params.params_file = null
 params.executor = 'local'
 params.git_repo_prefix = env('GIT_REPO_PREFIX') ?: 'https://github.com/AllenNeuralDynamics/aind-'
 params.capsule_versions = "${projectDir}/capsule_versions.env"
+params.container_tag = null
 params.n_jobs = -1
 params.runmode = 'full'
 params.sorter = 'kilosort4'
@@ -16,8 +17,12 @@ params.spikesorting_args = ''
 params.postprocessing_args = ''
 params.curation_args = ''
 params.visualization_kwargs = ''
+params.result_collector_args = ''
+params.quality_control_args = ''
+params.quality_control_collector_args = ''
 params.nwb_subject_args = ''
 params.nwb_ecephys_args = ''
+params.nwb_units_args = ''
 
 def cloneFunctionScript() {
     return '''
@@ -41,8 +46,11 @@ def stringParameter(pipelineParams, name) {
     return value instanceof String ? value : ''
 }
 
-def buildStepArguments(jsonSection, pipelineParams, cliParameterName) {
+def buildStepArguments(jsonSection, pipelineParams, cliParameterName, loggingParams) {
     def arguments = jsonSection ? new LinkedHashMap(jsonSection) : [:]
+    if (loggingParams && !arguments.containsKey('logging')) {
+        arguments['logging'] = loggingParams
+    }
     def cliArguments = stringParameter(pipelineParams, cliParameterName).trim()
 
     if (cliArguments) {
@@ -58,7 +66,7 @@ def buildStepArguments(jsonSection, pipelineParams, cliParameterName) {
 
     return arguments
         ? "--params '${groovy.json.JsonOutput.toJson(arguments)}'"
-        : ''
+        : "--params '{}'"
 }
 
 def buildSettings(pipelineParams) {
@@ -69,9 +77,11 @@ def buildSettings(pipelineParams) {
     settings.git_repo_prefix = pipelineParams.git_repo_prefix
     settings.clone_function = cloneFunctionScript()
 
-    def jsonParams = pipelineParams.params_file
-        ? new groovy.json.JsonSlurper().parseText(new File(pipelineParams.params_file.toString()).text)
-        : [:]
+    settings.params_file = pipelineParams.params_file
+        ? pipelineParams.params_file.toString()
+        : "${projectDir}/default_params.json".toString()
+    def jsonParams = new groovy.json.JsonSlurper().parseText(new File(settings.params_file).text)
+    def loggingParams = jsonParams.logging
 
     def defaultVersionsFile = new File(pipelineParams.capsule_versions.toString())
     def customVersionsFile = new File(defaultVersionsFile.parent, 'capsule_versions_custom.env')
@@ -85,8 +95,45 @@ def buildSettings(pipelineParams) {
             versions[key] = value
         }
     }
+
+    // Allow CLI/config to override individual step repos and commits.
+    // Usage: --preprocessing_repo <url> --preprocessing_commit <hash>
+    def stepVersionKeys = [
+        'job_dispatch':              ['JOB_DISPATCH_REPO',              'JOB_DISPATCH_COMMIT'],
+        'preprocessing':             ['PREPROCESSING_REPO',             'PREPROCESSING_COMMIT'],
+        'spikesort_ks25':            ['SPIKESORT_KS25_REPO',            'SPIKESORT_KS25_COMMIT'],
+        'spikesort_ks4':             ['SPIKESORT_KS4_REPO',             'SPIKESORT_KS4_COMMIT'],
+        'spikesort_sc2':             ['SPIKESORT_SC2_REPO',             'SPIKESORT_SC2_COMMIT'],
+        'spikesort_lupin':           ['SPIKESORT_LUPIN_REPO',           'SPIKESORT_LUPIN_COMMIT'],
+        'postprocessing':            ['POSTPROCESSING_REPO',            'POSTPROCESSING_COMMIT'],
+        'curation':                  ['CURATION_REPO',                  'CURATION_COMMIT'],
+        'visualization':             ['VISUALIZATION_REPO',             'VISUALIZATION_COMMIT'],
+        'results_collector':         ['RESULTS_COLLECTOR_REPO',         'RESULTS_COLLECTOR_COMMIT'],
+        'quality_control':           ['QUALITY_CONTROL_REPO',           'QUALITY_CONTROL_COMMIT'],
+        'quality_control_collector': ['QUALITY_CONTROL_COLLECTOR_REPO', 'QUALITY_CONTROL_COLLECTOR_COMMIT'],
+        'nwb_ecephys':               ['NWB_ECEPHYS_REPO',               'NWB_ECEPHYS_COMMIT'],
+        'nwb_units':                 ['NWB_UNITS_REPO',                 'NWB_UNITS_COMMIT'],
+    ]
+    stepVersionKeys.each { step, keys ->
+        if (pipelineParams.containsKey("${step}_repo".toString())) {
+            versions[keys[0]] = pipelineParams["${step}_repo".toString()]
+            println "OVERRIDE ${keys[0]} (from CLI): ${versions[keys[0]]}"
+        }
+        if (pipelineParams.containsKey("${step}_commit".toString())) {
+            versions[keys[1]] = pipelineParams["${step}_commit".toString()]
+            println "OVERRIDE ${keys[1]} (from CLI): ${versions[keys[1]]}"
+        }
+    }
     settings.versions = versions
-    settings.container_tag = "si-${versions['SPIKEINTERFACE_VERSION']}"
+
+    // container tag: CLI/config > CONTAINER_TAG env var > capsule_versions.env
+    settings.container_tag = pipelineParams.container_tag
+        ?: env('CONTAINER_TAG')
+        ?: versions['CONTAINER_TAG']
+
+    def pipelineVersionFile = new File(defaultVersionsFile.parent, 'pipeline_version.txt')
+    settings.pipeline_version = pipelineVersionFile.exists() ? pipelineVersionFile.text.trim() : ''
+    settings.pipeline_url = 'https://github.com/AllenNeuralDynamics/aind-ephys-pipeline'
 
     def extraInstalls = versions['EXTRA_INSTALLS'] ?: ''
     def extraInstallList = extraInstalls
@@ -104,13 +151,17 @@ def buildSettings(pipelineParams) {
     settings.job_args = settings.executor == 'local' ? " --n-jobs ${nJobs}" : ''
     settings.runmode = parameterNames.contains('runmode') ? pipelineParams.runmode : 'full'
 
-    settings.job_dispatch_args = buildStepArguments(jsonParams.job_dispatch, pipelineParams, 'job_dispatch_args')
-    settings.preprocessing_args = buildStepArguments(jsonParams.preprocessing, pipelineParams, 'preprocessing_args')
-    settings.postprocessing_args = buildStepArguments(jsonParams.postprocessing, pipelineParams, 'postprocessing_args')
-    settings.curation_args = buildStepArguments(jsonParams.curation, pipelineParams, 'curation_args')
-    settings.visualization_kwargs = buildStepArguments(jsonParams.visualization, pipelineParams, 'visualization_kwargs')
-    settings.nwb_subject_args = buildStepArguments(jsonParams.nwb?.subject, pipelineParams, 'nwb_subject_args')
-    settings.nwb_ecephys_args = buildStepArguments(jsonParams.nwb?.ecephys, pipelineParams, 'nwb_ecephys_args')
+    settings.job_dispatch_args = buildStepArguments(jsonParams.job_dispatch, pipelineParams, 'job_dispatch_args', loggingParams)
+    settings.preprocessing_args = buildStepArguments(jsonParams.preprocessing, pipelineParams, 'preprocessing_args', loggingParams)
+    settings.postprocessing_args = buildStepArguments(jsonParams.postprocessing, pipelineParams, 'postprocessing_args', loggingParams)
+    settings.curation_args = buildStepArguments(jsonParams.curation, pipelineParams, 'curation_args', loggingParams)
+    settings.visualization_kwargs = buildStepArguments(jsonParams.visualization, pipelineParams, 'visualization_kwargs', loggingParams)
+    settings.result_collector_args = buildStepArguments(jsonParams.result_collector, pipelineParams, 'result_collector_args', loggingParams)
+    settings.quality_control_args = buildStepArguments(jsonParams.quality_control, pipelineParams, 'quality_control_args', loggingParams)
+    settings.quality_control_collector_args = buildStepArguments(jsonParams.quality_control_collector, pipelineParams, 'quality_control_collector_args', loggingParams)
+    settings.nwb_subject_args = buildStepArguments(jsonParams.nwb?.subject, pipelineParams, 'nwb_subject_args', loggingParams)
+    settings.nwb_ecephys_args = buildStepArguments(jsonParams.nwb?.ecephys, pipelineParams, 'nwb_ecephys_args', loggingParams)
+    settings.nwb_units_args = buildStepArguments(jsonParams.nwb?.units, pipelineParams, 'nwb_units_args', loggingParams)
 
     settings.sorter = jsonParams.spikesorting?.sorter
         ?: stringParameter(pipelineParams, 'sorter')
@@ -118,7 +169,7 @@ def buildSettings(pipelineParams) {
     def sorterParams = jsonParams.spikesorting
         ? jsonParams.spikesorting[settings.sorter]
         : null
-    settings.spikesorting_args = buildStepArguments(sorterParams, pipelineParams, 'spikesorting_args')
+    settings.spikesorting_args = buildStepArguments(sorterParams, pipelineParams, 'spikesorting_args', loggingParams)
 
     if (settings.runmode == 'fast') {
         settings.preprocessing_args = '--motion skip'
@@ -130,6 +181,27 @@ def buildSettings(pipelineParams) {
 }
 
 // Process definitions
+process validate_params {
+    tag 'validate_params'
+    container "ghcr.io/allenneuraldynamics/aind-ephys-pipeline-base:${settings.container_tag}"
+
+    input:
+    val settings
+    path params_file
+    path schema_file
+    output:
+    path 'validation.ok', emit: ok
+    script:
+    """
+    #!/usr/bin/env bash
+    set -e
+
+    validate_params.py ${params_file} ${schema_file}
+    touch validation.ok
+    """
+}
+
+
 process job_dispatch {
     tag 'job-dispatch'
     container "ghcr.io/allenneuraldynamics/aind-ephys-pipeline-base:${settings.container_tag}"
@@ -137,6 +209,7 @@ process job_dispatch {
     input:
     val settings
     path input_folder, stageAs: 'capsule/data/ecephys_session'
+    path validation_ok
     
     output:
     path 'capsule/results/*', emit: results
@@ -566,6 +639,9 @@ process results_collector {
         echo "[${task.tag}] allocated task time: ${task.time}"
     fi
 
+    export PIPELINE_VERSION=${settings.pipeline_version}
+    export PIPELINE_URL=${settings.pipeline_url}
+
     echo "[${task.tag}] cloning git repo..."
     ${settings.clone_function}
     clone_repo "${settings.versions['RESULTS_COLLECTOR_REPO']}" "${settings.versions['RESULTS_COLLECTOR_COMMIT']}"
@@ -573,7 +649,7 @@ process results_collector {
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
-    ./run --pipeline-data-path ${settings.data_path} --pipeline-results-path ${settings.results_path}
+    ./run --pipeline-data-path ${settings.data_path} --pipeline-results-path ${settings.results_path} ${settings.result_collector_args}
 
     echo "[${task.tag}] completed!"
     """
@@ -619,7 +695,7 @@ process quality_control {
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
-    ./run --pipeline-data-path ${settings.data_path}
+    ./run --pipeline-data-path ${settings.data_path} ${settings.quality_control_args}
 
     echo "[${task.tag}] completed!"
     """
@@ -660,7 +736,7 @@ process quality_control_collector {
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
-    ./run
+    ./run ${settings.quality_control_collector_args}
 
     echo "[${task.tag}] completed!"
     """
@@ -752,7 +828,7 @@ process nwb_units {
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
-    ./run
+    ./run ${settings.nwb_units_args}
 
     echo "[${task.tag}] completed!"
     """
@@ -764,14 +840,21 @@ workflow {
     println "DATA_PATH: ${settings.data_path}"
     println "RESULTS_PATH: ${settings.results_path}"
     println "CONTAINER TAG: ${settings.container_tag}"
+    println "PIPELINE VERSION: ${settings.pipeline_version}"
+    println "PARAMS FILE: ${settings.params_file}"
     println "Using RUNMODE: ${settings.runmode}"
     println "Using SORTER: ${settings.sorter} with args: ${settings.spikesorting_args}"
 
     // Input channel from ecephys path
     ecephys_ch = channel.fromPath(params.ecephys_path + '/', type: 'any')
 
+    params_file = file(settings.params_file)
+    schema_file = file("${projectDir}/default_params_schema.json")
+
+    validation_out = validate_params(settings, params_file, schema_file)
+
     // Job dispatch
-    job_dispatch_out = job_dispatch(settings, ecephys_ch.collect())
+    job_dispatch_out = job_dispatch(settings, ecephys_ch.collect(), validation_out.ok)
 
     max_duration_file = job_dispatch_out.max_duration_file
     max_duration_minutes = max_duration_file.map { durationFile -> durationFile.text.trim() }
