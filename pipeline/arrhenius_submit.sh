@@ -48,6 +48,11 @@ echo "WORKDIR:      $WORKDIR"
 export ARRHENIUS_CPU_ACCOUNT="naiss2026-3-127-cpu"
 export ARRHENIUS_GPU_ACCOUNT="naiss2026-3-127-gpu"
 export KS4_ARM64_SIF="$USER_DIR/containers/aind-ephys-spikesort-kilosort4_1.4.0_arm64.sif"
+export KS4_ARM64_CUFFT="${KS4_ARM64_SIF%.sif}_libcufft.so.11"
+if [[ ! -f "$KS4_ARM64_SIF" || ! -f "$KS4_ARM64_CUFFT" ]]; then
+    echo "ERROR: missing $KS4_ARM64_SIF and/or $KS4_ARM64_CUFFT; run: sbatch scripts/build_kilosort4_arm64.sh" >&2
+    exit 66
+fi
 
 # Apptainer images and Nextflow state must live outside $HOME on Arrhenius
 export NXF_APPTAINER_CACHEDIR="$USER_DIR/apptainer_cache"

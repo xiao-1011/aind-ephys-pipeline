@@ -5,8 +5,11 @@
 # official PyTorch aarch64 CUDA wheels, which bundle their own CUDA libraries.
 #
 # CUDA version: the wheel's CUDA must not be newer than what the host driver supports.
-# Arrhenius GH200 nodes run driver 580 (CUDA 13.0); NGC pytorch 26.02 (CUDA 13.1)
-# crashes in cuFFT plan creation there, while cu128 wheels work.
+# Arrhenius GH200 nodes run driver 580 (CUDA 13.0), so the cu128 wheels are used.
+#
+# Runtime caveat: on Arrhenius, libcufft.so.11 fails (CUFFT_INTERNAL_ERROR) when loaded from the
+# overlayfs-mounted image root, whatever the CUDA version. The build script extracts a copy next
+# to the .sif and nextflow_arrhenius.config binds it over the image's path, which works.
 #
 # Build on a GPU node (the image architecture follows the build node), from the repo root:
 #
