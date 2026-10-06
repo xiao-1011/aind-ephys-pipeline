@@ -73,10 +73,16 @@
             "localize_peaks_kwargs": {},
             "estimate_motion_kwargs": {
                 "rigid": true,
+                "batching_mode": "full",
                 "win_step_norm": 0.1,
                 "win_scale_norm": 0.1
             },
-            "interpolate_motion_kwargs": {}
+            "interpolate_motion_kwargs": {
+                "border_mode": "force_extrapolate",
+                "spatial_interpolation_method": "kriging",
+                "sigma_um": 20.0,
+                "p": 2
+            }
         }
     },
     "postprocessing": {
