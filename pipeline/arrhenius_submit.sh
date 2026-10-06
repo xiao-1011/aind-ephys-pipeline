@@ -22,7 +22,7 @@ set -euo pipefail
 module load Java/21.0.11-bdist Nextflow/25.10.6-eb
 
 USER_DIR="/nobackup/proj/disk/dmclab/personal/$USER"
-PIPELINE_PATH="$USER_DIR/git_repo/aind-ephys-pipeline"
+PIPELINE_PATH="${PIPELINE_PATH:-$USER_DIR/git_repo/aind-ephys-pipeline}"
 
 RAW_ROOT="$USER_DIR/raw_ecephys"
 SORTED_ROOT="$USER_DIR/sorted_ecephys"
@@ -39,7 +39,7 @@ else
     exit 64
 fi
 export RESULTS_PATH="$(realpath -m "${2:-$SORTED_ROOT/$SESSION_REL}")"
-WORKDIR="$USER_DIR/nextflow_work/$SESSION_REL"
+WORKDIR="${NXF_SESSION_WORK_ROOT:-$USER_DIR/nextflow_work}/$SESSION_REL"
 
 echo "DATA_PATH:    $DATA_PATH"
 echo "RESULTS_PATH: $RESULTS_PATH"
@@ -68,9 +68,13 @@ mkdir -p "$RESULTS_PATH/nextflow" "$WORKDIR" "$NXF_APPTAINER_CACHEDIR"
 cd "$WORKDIR"
 
 # -C uses only this config (skips the Code Ocean pipeline/nextflow.config)
+RESUME_ARGS=(-resume)
+if [[ "${ARRHENIUS_FRESH_RUN:-0}" == 1 ]]; then
+    RESUME_ARGS=()
+fi
 nextflow \
     -C "$PIPELINE_PATH/pipeline/nextflow_arrhenius.config" \
     -log "$RESULTS_PATH/nextflow/nextflow.log" \
     run "$PIPELINE_PATH/pipeline/main_multi_backend.nf" \
     -work-dir "$WORKDIR" \
-    -resume
+    "${RESUME_ARGS[@]}"
