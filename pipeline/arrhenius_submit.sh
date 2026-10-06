@@ -1,35 +1,40 @@
 #!/bin/bash
 # Nextflow controller job for the NAISS Arrhenius HPC.
 # The controller itself is lightweight; each pipeline step is submitted as its own Slurm job.
-#SBATCH -A naissXXXX-XX-XX-cpu
+#
+# Usage:
+#   sbatch pipeline/arrhenius_submit.sh <ecephys_session_dir> [results_dir]
+#SBATCH -A naiss2026-3-127-cpu
 #SBATCH --partition=cpu
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=4
-#SBATCH --mem=3G
-#SBATCH --time=2-00:00:00
+#SBATCH --cpus-per-task=2
+#SBATCH --mem=5G
+#SBATCH --time=3-00:00:00
 #SBATCH --job-name=aind-ephys-nf
 #SBATCH --output=%x-%j.out
 
 set -euo pipefail
 
-# Make nextflow (>= 26.04, Java 17+) available, e.g. via a conda environment
-# conda activate env_nf
+module load Java/21.0.11-bdist Nextflow/25.10.6-eb
 
-PROJECT_DIR="/nobackup/proj/disk/CHANGE_ME"
-PIPELINE_PATH="$PROJECT_DIR/aind-ephys-pipeline"
-export DATA_PATH="$PROJECT_DIR/data/CHANGE_ME"
-export RESULTS_PATH="$PROJECT_DIR/results/CHANGE_ME"
-WORKDIR="$PROJECT_DIR/nextflow_work"
+USER_DIR="/nobackup/proj/disk/dmclab/personal/$USER"
+PIPELINE_PATH="$USER_DIR/git_repo/aind-ephys-pipeline"
 
-export ARRHENIUS_CPU_ACCOUNT="naissXXXX-XX-XX-cpu"
-export ARRHENIUS_GPU_ACCOUNT="naissXXXX-XX-XX-gpu"
-export KS4_ARM64_SIF="$PROJECT_DIR/containers/aind-ephys-spikesort-kilosort4_1.4.0_arm64.sif"
+export DATA_PATH="${1:?usage: sbatch arrhenius_submit.sh <ecephys_session_dir> [results_dir]}"
+export RESULTS_PATH="${2:-${DATA_PATH%/}_sorted}"
+WORKDIR="$USER_DIR/nextflow_work/$(basename "${DATA_PATH%/}")"
 
-# Apptainer images and caches must live outside $HOME on Arrhenius
-export NXF_APPTAINER_CACHEDIR="$PROJECT_DIR/apptainer_cache"
+export ARRHENIUS_CPU_ACCOUNT="naiss2026-3-127-cpu"
+export ARRHENIUS_GPU_ACCOUNT="naiss2026-3-127-gpu"
+export KS4_ARM64_SIF="$USER_DIR/containers/aind-ephys-spikesort-kilosort4_1.4.0_arm64.sif"
+
+# Apptainer images and Nextflow state must live outside $HOME on Arrhenius
+export NXF_APPTAINER_CACHEDIR="$USER_DIR/apptainer_cache"
 export APPTAINER_CACHEDIR="$NXF_APPTAINER_CACHEDIR"
-export NXF_HOME="$PROJECT_DIR/.nextflow"
+export NXF_HOME="$USER_DIR/.nextflow"
+# Same (strict) parser as local runs with Nextflow >= 26.04
+export NXF_SYNTAX_PARSER=v2
 
 mkdir -p "$RESULTS_PATH/nextflow" "$WORKDIR" "$NXF_APPTAINER_CACHEDIR"
 
