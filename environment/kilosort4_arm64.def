@@ -1,11 +1,12 @@
 # Apptainer recipe: aarch64 (Arm/Grace) Kilosort4 image for NVIDIA GH200 GPU nodes.
 #
 # The published ghcr.io/allenneuraldynamics/aind-ephys-spikesort-kilosort4 images
-# are amd64-only. This recipe mirrors environment/Dockerfile_kilosort4 on top of
-# NVIDIA's multi-arch PyTorch container, keeping its CUDA-enabled torch build.
+# are amd64-only. This recipe mirrors environment/Dockerfile_kilosort4 using the
+# official PyTorch aarch64 CUDA wheels, which bundle their own CUDA libraries.
 #
-# The base image must ship a torch compiled against NumPy 2, since SpikeInterface
-# >= 0.105 requires numpy 2 (NGC 25.01 is too old: torch <-> numpy conversion breaks).
+# CUDA version: the wheel's CUDA must not be newer than what the host driver supports.
+# Arrhenius GH200 nodes run driver 580 (CUDA 13.0); NGC pytorch 26.02 (CUDA 13.1)
+# crashes in cuFFT plan creation there, while cu128 wheels work.
 #
 # Build on a GPU node (the image architecture follows the build node), from the repo root:
 #
@@ -14,30 +15,24 @@
 # The script builds the image and checks it with the GPU.
 
 Bootstrap: docker
-From: nvcr.io/nvidia/pytorch:26.02-py3
+# Full (non-slim) image: includes git (needed at runtime to clone capsule code) and compilers
+From: python:3.12-bookworm
 
 %files
     environment/package-versions.txt /opt/package-versions.txt
 
 %post
     set -e
-    export DEBIAN_FRONTEND=noninteractive
-    # git is needed at runtime: each pipeline step clones its capsule code
-    if ! command -v git >/dev/null; then
-        apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
-    fi
+    export PIP_NO_CACHE_DIR=1
+    git --version
 
-    # Plain PyPI only: NGC's pip config adds pypi.ngc.nvidia.com (unreachable from
-    # Arrhenius compute nodes) and a global constraint file that conflicts with newer pins
-    unset PIP_CONSTRAINT PIP_EXTRA_INDEX_URL PIP_INDEX_URL
-    export PIP_CONFIG_FILE=/dev/null PIP_NO_CACHE_DIR=1
+    python -m pip install --upgrade pip
 
-    # Keep the NGC CUDA-enabled torch: never let pip replace it with a CPU wheel
-    # (pip freeze lists NGC's torch as "torch @ file://...", so ask torch for its version)
+    # CUDA 12.8 torch for aarch64; pin it so later installs can't swap it for another build
+    python -m pip install "torch==2.11.0" --index-url https://download.pytorch.org/whl/cu128
     python -c "import torch; print(f'torch=={torch.__version__}')" > /opt/torch-constraint.txt
     cat /opt/torch-constraint.txt
 
-    python -m pip install --upgrade pip
     grep -E 'log-schema|aind-data-schema|scipy' /opt/package-versions.txt \
         | xargs python -m pip install -c /opt/torch-constraint.txt
 
@@ -46,10 +41,10 @@ From: nvcr.io/nvidia/pytorch:26.02-py3
         "spikeinterface[full]==${SPIKEINTERFACE_VERSION}" \
         "kilosort==4.1.7"
 
-    # Fail the build if torch lost CUDA or cannot exchange arrays with the installed numpy
+    # Fail the build if torch is not a CUDA 12 build or cannot exchange arrays with numpy
     python -c "
 import numpy, torch
-assert torch.version.cuda, 'torch lost its CUDA build'
+assert (torch.version.cuda or '').startswith('12.'), f'unexpected torch CUDA build: {torch.version.cuda}'
 t = torch.from_numpy(numpy.arange(3.0))
 assert t.numpy().sum() == 3.0
 print('torch', torch.__version__, 'CUDA', torch.version.cuda, '| numpy', numpy.__version__, '| numpy interop OK')
@@ -58,7 +53,6 @@ print('torch', torch.__version__, 'CUDA', torch.version.cuda, '| numpy', numpy._
 %environment
     export NUMBA_CACHE_DIR=/tmp/numba_cache
     export MPLCONFIGDIR=/tmp/matplotlib_cache
-    unset PIP_CONSTRAINT
 
 %labels
-    Description aarch64 Kilosort4 4.1.7 + SpikeInterface for aind-ephys-pipeline 1.4.0 on GH200
+    Description aarch64 Kilosort4 4.1.7 + SpikeInterface (torch cu128) for aind-ephys-pipeline 1.4.0 on GH200

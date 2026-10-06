@@ -41,6 +41,10 @@ import numpy, torch, kilosort, spikeinterface as si, aind_data_schema, log_schem
 print('torch', torch.__version__, '| CUDA available:', torch.cuda.is_available(), '|', torch.cuda.get_device_name(0))
 x = torch.from_numpy(numpy.random.rand(1000, 64).astype('float32')).cuda()
 print('numpy', numpy.__version__, '| numpy -> GPU -> numpy OK:', bool((x @ x.T).cpu().numpy().shape == (1000, 1000)))
+# cuFFT is what Kilosort's highpass filter uses; it crashes when the CUDA libs are newer than the driver
+for n in (1024, 60000, 60122):
+    torch.fft.rfft(torch.randn(4, n, device='cuda'))
+print('cuFFT OK')
 print('kilosort', kilosort.__version__, '| spikeinterface', si.__version__)
 import spikeinterface.sorters as ss
 print('kilosort4 installed for SpikeInterface:', ss.Kilosort4Sorter.is_installed())
