@@ -58,6 +58,10 @@ export NXF_SYNTAX_PARSER=v2
 
 mkdir -p "$RESULTS_PATH/nextflow" "$WORKDIR" "$NXF_APPTAINER_CACHEDIR"
 
+# Launch from the per-session work dir so each session has its own .nextflow
+# history: -resume then picks up that session's last run, and parallel sessions don't clash
+cd "$WORKDIR"
+
 # -C uses only this config (skips the Code Ocean pipeline/nextflow.config)
 nextflow \
     -C "$PIPELINE_PATH/pipeline/nextflow_arrhenius.config" \
