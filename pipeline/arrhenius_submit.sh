@@ -4,6 +4,9 @@
 #
 # Usage:
 #   sbatch pipeline/arrhenius_submit.sh <ecephys_session_dir> [results_dir]
+#
+# Sessions under raw_ecephys/<cohort>/<date>/<recording> are written to
+# sorted_ecephys/<cohort>/<date>/<recording> unless results_dir is given.
 #SBATCH -A naiss2026-3-127-cpu
 #SBATCH --partition=cpu
 #SBATCH --nodes=1
@@ -21,9 +24,26 @@ module load Java/21.0.11-bdist Nextflow/25.10.6-eb
 USER_DIR="/nobackup/proj/disk/dmclab/personal/$USER"
 PIPELINE_PATH="$USER_DIR/git_repo/aind-ephys-pipeline"
 
-export DATA_PATH="${1:?usage: sbatch arrhenius_submit.sh <ecephys_session_dir> [results_dir]}"
-export RESULTS_PATH="${2:-${DATA_PATH%/}_sorted}"
-WORKDIR="$USER_DIR/nextflow_work/$(basename "${DATA_PATH%/}")"
+RAW_ROOT="$USER_DIR/raw_ecephys"
+SORTED_ROOT="$USER_DIR/sorted_ecephys"
+
+export DATA_PATH="$(realpath -m "${1:?usage: sbatch arrhenius_submit.sh <ecephys_session_dir> [results_dir]}")"
+
+# Mirror the raw layout: raw_ecephys/<cohort>/<date>/<recording> -> sorted_ecephys/<cohort>/<date>/<recording>
+if [[ "$DATA_PATH" == "$RAW_ROOT"/* ]]; then
+    SESSION_REL="${DATA_PATH#"$RAW_ROOT"/}"
+elif [[ -n "${2:-}" ]]; then
+    SESSION_REL="$(basename "$DATA_PATH")"
+else
+    echo "ERROR: $DATA_PATH is not under $RAW_ROOT; pass a results_dir as the second argument" >&2
+    exit 64
+fi
+export RESULTS_PATH="$(realpath -m "${2:-$SORTED_ROOT/$SESSION_REL}")"
+WORKDIR="$USER_DIR/nextflow_work/$SESSION_REL"
+
+echo "DATA_PATH:    $DATA_PATH"
+echo "RESULTS_PATH: $RESULTS_PATH"
+echo "WORKDIR:      $WORKDIR"
 
 export ARRHENIUS_CPU_ACCOUNT="naiss2026-3-127-cpu"
 export ARRHENIUS_GPU_ACCOUNT="naiss2026-3-127-gpu"
