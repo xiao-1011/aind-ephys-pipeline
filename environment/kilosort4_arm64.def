@@ -1,0 +1,50 @@
+# Apptainer recipe: aarch64 (Arm/Grace) Kilosort4 image for NVIDIA GH200 GPU nodes.
+#
+# The published ghcr.io/allenneuraldynamics/aind-ephys-spikesort-kilosort4 images
+# are amd64-only. This recipe mirrors environment/Dockerfile_kilosort4 on top of
+# NVIDIA's multi-arch PyTorch container, keeping its CUDA-enabled torch build.
+#
+# Build on a GPU node (the image architecture follows the build node), from the repo root:
+#
+#   interactive -A <project>-gpu --partition gpu --gpus 1
+#   export APPTAINER_TMPDIR=/scratch/local/$USER/apptainer_tmp && mkdir -p $APPTAINER_TMPDIR
+#   export APPTAINER_CACHEDIR=/nobackup/proj/disk/<project>/apptainer_cache
+#   apptainer build \
+#       /nobackup/proj/disk/<project>/containers/aind-ephys-spikesort-kilosort4_1.4.0_arm64.sif \
+#       environment/kilosort4_arm64.def
+#
+# Quick check on the GPU node:
+#   apptainer exec --nv <sif> python -c "import torch, kilosort, spikeinterface as si; print(torch.cuda.get_device_name(0), si.__version__)"
+
+Bootstrap: docker
+From: nvcr.io/nvidia/pytorch:25.01-py3
+
+%files
+    environment/package-versions.txt /opt/package-versions.txt
+
+%post
+    set -e
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
+
+    # Keep the NGC CUDA-enabled torch: never let pip replace it with a CPU wheel
+    pip freeze | grep -iE '^torch==' > /opt/torch-constraint.txt
+    # NGC images ship a global pip constraint file that conflicts with newer pins
+    unset PIP_CONSTRAINT
+
+    python -m pip install --upgrade pip
+    grep -E 'log-schema|aind-data-schema|scipy' /opt/package-versions.txt \
+        | xargs python -m pip install -c /opt/torch-constraint.txt
+
+    SPIKEINTERFACE_VERSION=$(grep '^spikeinterface==' /opt/package-versions.txt | cut -d'=' -f3)
+    python -m pip install -c /opt/torch-constraint.txt \
+        "spikeinterface[full]==${SPIKEINTERFACE_VERSION}" \
+        "kilosort==4.1.7"
+
+%environment
+    export NUMBA_CACHE_DIR=/tmp/numba_cache
+    export MPLCONFIGDIR=/tmp/matplotlib_cache
+    unset PIP_CONSTRAINT
+
+%labels
+    Description aarch64 Kilosort4 4.1.7 + SpikeInterface for aind-ephys-pipeline 1.4.0 on GH200
