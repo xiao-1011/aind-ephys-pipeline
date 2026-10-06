@@ -25,7 +25,9 @@ From: nvcr.io/nvidia/pytorch:25.01-py3
     fi
 
     # Keep the NGC CUDA-enabled torch: never let pip replace it with a CPU wheel
-    pip freeze | grep -iE '^torch==' > /opt/torch-constraint.txt
+    # (pip freeze lists NGC's torch as "torch @ file://...", so ask torch for its version)
+    python -c "import torch; print(f'torch=={torch.__version__}')" > /opt/torch-constraint.txt
+    cat /opt/torch-constraint.txt
     # NGC images ship a global pip constraint file that conflicts with newer pins
     unset PIP_CONSTRAINT
 
@@ -37,6 +39,8 @@ From: nvcr.io/nvidia/pytorch:25.01-py3
     python -m pip install -c /opt/torch-constraint.txt \
         "spikeinterface[full]==${SPIKEINTERFACE_VERSION}" \
         "kilosort==4.1.7"
+
+    python -c "import torch; assert torch.version.cuda, 'torch lost its CUDA build'; print('torch', torch.__version__, 'CUDA', torch.version.cuda)"
 
 %environment
     export NUMBA_CACHE_DIR=/tmp/numba_cache
