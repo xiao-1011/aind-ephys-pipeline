@@ -11,6 +11,10 @@ The launcher discovers session directories exactly three levels under
 and submits an independent Slurm controller. Closing SSH or OpenCode does not
 stop it. Sessions run sequentially, in cohort/date/session order.
 
+The KS4 Arm container explicitly caps BLAS/OpenMP threads to one. Without that
+cap, NumPy/OpenBLAS can segfault on 288-core Grace nodes during import. This does
+not change the motion/sorting parameters or disable GPU processing.
+
 Each session is processed, packed as **one uncompressed `.tar` file**, extracted
 and verified, and only then cleaned. Tar is intentional: storage is acceptable,
 and it avoids recompressing Zarr while reducing inode use. Archives are in
