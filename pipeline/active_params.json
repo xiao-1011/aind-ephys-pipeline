@@ -74,6 +74,7 @@
             "estimate_motion_kwargs": {
                 "rigid": true,
                 "batching_mode": "full",
+                "max_disp_um": 100.0,
                 "win_step_norm": 0.1,
                 "win_scale_norm": 0.1
             },
