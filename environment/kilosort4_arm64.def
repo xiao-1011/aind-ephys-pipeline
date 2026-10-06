@@ -4,6 +4,9 @@
 # are amd64-only. This recipe mirrors environment/Dockerfile_kilosort4 on top of
 # NVIDIA's multi-arch PyTorch container, keeping its CUDA-enabled torch build.
 #
+# The base image must ship a torch compiled against NumPy 2, since SpikeInterface
+# >= 0.105 requires numpy 2 (NGC 25.01 is too old: torch <-> numpy conversion breaks).
+#
 # Build on a GPU node (the image architecture follows the build node), from the repo root:
 #
 #   sbatch scripts/build_kilosort4_arm64.sh
@@ -11,7 +14,7 @@
 # The script builds the image and checks it with the GPU.
 
 Bootstrap: docker
-From: nvcr.io/nvidia/pytorch:25.01-py3
+From: nvcr.io/nvidia/pytorch:26.02-py3
 
 %files
     environment/package-versions.txt /opt/package-versions.txt
@@ -24,12 +27,15 @@ From: nvcr.io/nvidia/pytorch:25.01-py3
         apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
     fi
 
+    # Plain PyPI only: NGC's pip config adds pypi.ngc.nvidia.com (unreachable from
+    # Arrhenius compute nodes) and a global constraint file that conflicts with newer pins
+    unset PIP_CONSTRAINT PIP_EXTRA_INDEX_URL PIP_INDEX_URL
+    export PIP_CONFIG_FILE=/dev/null PIP_NO_CACHE_DIR=1
+
     # Keep the NGC CUDA-enabled torch: never let pip replace it with a CPU wheel
     # (pip freeze lists NGC's torch as "torch @ file://...", so ask torch for its version)
     python -c "import torch; print(f'torch=={torch.__version__}')" > /opt/torch-constraint.txt
     cat /opt/torch-constraint.txt
-    # NGC images ship a global pip constraint file that conflicts with newer pins
-    unset PIP_CONSTRAINT
 
     python -m pip install --upgrade pip
     grep -E 'log-schema|aind-data-schema|scipy' /opt/package-versions.txt \
@@ -40,7 +46,14 @@ From: nvcr.io/nvidia/pytorch:25.01-py3
         "spikeinterface[full]==${SPIKEINTERFACE_VERSION}" \
         "kilosort==4.1.7"
 
-    python -c "import torch; assert torch.version.cuda, 'torch lost its CUDA build'; print('torch', torch.__version__, 'CUDA', torch.version.cuda)"
+    # Fail the build if torch lost CUDA or cannot exchange arrays with the installed numpy
+    python -c "
+import numpy, torch
+assert torch.version.cuda, 'torch lost its CUDA build'
+t = torch.from_numpy(numpy.arange(3.0))
+assert t.numpy().sum() == 3.0
+print('torch', torch.__version__, 'CUDA', torch.version.cuda, '| numpy', numpy.__version__, '| numpy interop OK')
+"
 
 %environment
     export NUMBA_CACHE_DIR=/tmp/numba_cache
