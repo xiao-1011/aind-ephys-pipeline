@@ -17,10 +17,26 @@ test "$(git -C "$REPO" rev-parse HEAD)" = "${KS4_PILOT_COMMIT:?Pass its SHA in K
 test -z "$(git -C "$REPO" status --porcelain)"
 P="$U/baseline_pilots/ks4_followups_20261008_${SLURM_JOB_ID:?Submit with sbatch}"
 ARCHIVE_ROOT="$U/session_archives/ks4_motion_baseline_20261008"
+BASELINE_REPORT="$U/baseline_pilots/20261008_ks4_builtin64_vr1520260318_g0_ce4972d/archive_report_6d38ae9.json"
 BASE="$U/apptainer_cache/ghcr.io-allenneuraldynamics-aind-ephys-pipeline-base-1.4.0.img"
 PATCHED="$U/containers/aind-ephys-curation_1.4.0_si4830.sif"
 test -f "$BASE"
 test ! -e "$P"
+python3 - "$REPO" "$BASELINE_REPORT" "$U" <<'PY'
+import json
+from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(sys.argv[1]) / "scripts"))
+from archive_session import digest, require
+from arrhenius_batch import validate_report
+report = json.loads(Path(sys.argv[2]).read_text())
+raw = Path(sys.argv[3]) / "raw_ecephys/cohort06/20260318/vr1520260318_g0"
+archive = Path(sys.argv[3]) / "session_archives/ks4_motion_baseline_20261008/cohort06/20260318/vr1520260318_g0.tar"
+require(report["raw"] == str(raw) and report["archive"] == str(archive), "Initial pilot report mismatch")
+validate_report(report, {"raw": str(raw), "archive": str(archive)},
+                digest(Path(sys.argv[1]) / "pipeline/active_params.json"))
+print("Initial KS4-only pilot archive restore report and checksum verified", flush=True)
+PY
 mkdir -p "$P/source" "$P/logs" "$P/reports" "$P/jobs"
 cp -a "$REPO/pipeline" "$REPO/scripts" "$P/source/"
 printf '%s\n' "$KS4_PILOT_COMMIT" > "$P/source/source_commit.txt"
