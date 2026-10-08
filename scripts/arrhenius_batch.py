@@ -90,7 +90,9 @@ def start(args):
     archive_root = (args.archive_root or user_root / "session_archives").resolve()
     require(archive_root.is_relative_to(user_root / "session_archives"),
             "Archive root must be inside the session_archives directory")
-    pilot = json.loads(args.pilot_report.read_text()) if args.pilot_report else None
+    pilot_reports = [json.loads(path.read_text()) for path in (args.pilot_report or [])]
+    pilot_by_raw = {report["raw"]: report for report in pilot_reports}
+    require(len(pilot_by_raw) == len(pilot_reports), "Duplicate pilot reports for one raw session")
     sessions = []
     for raw in sorted(raw_root.glob("*/*/*")):
         if not raw.is_dir():
@@ -101,6 +103,9 @@ def start(args):
         rel = str(raw.relative_to(raw_root))
         sessions.append({"relative": rel, "raw": str(raw), "archive": str(archive_root / (rel + ".tar")), "status": "pending"})
     require(sessions, "No raw sessions discovered")
+    require(set(pilot_by_raw).issubset({row["raw"] for row in sessions}), "Pilot report does not match any raw session")
+    existing = {row["raw"] for row in sessions if Path(row["archive"]).exists()}
+    require(existing == set(pilot_by_raw), "Supply exactly one verification report for each existing archive")
     batch = user_root / "batch_runs" / datetime.now().strftime("%Y%m%d_%H%M%S")
     batch.mkdir(parents=True, exist_ok=False)
     snapshot = batch / "snapshot"
@@ -120,7 +125,8 @@ def start(args):
         if not archive.exists():
             require(not archive.with_name(archive.name + ".partial").exists(), f"Inspect existing partial archive: {archive}")
             continue
-        require(pilot and pilot["raw"] == row["raw"], f"Existing archive has no supplied verification report: {archive}")
+        pilot = pilot_by_raw.get(row["raw"])
+        require(pilot is not None, f"Existing archive has no supplied verification report: {archive}")
         validate_report(pilot, row, params_hash)
         atomic_json(batch / "reports" / (Path(row["relative"]).name + ".json"), pilot)
         update(batch, manifest, row, "archived_pilot_sources_preserved", totals=totals(pilot))
@@ -225,7 +231,7 @@ if __name__ == "__main__":
     start_parser = sub.add_parser("start")
     start_parser.add_argument("--user-root", type=Path, required=True)
     start_parser.add_argument("--archive-root", type=Path, help="Isolated archive root under user-root/session_archives")
-    start_parser.add_argument("--pilot-report", type=Path)
+    start_parser.add_argument("--pilot-report", type=Path, action="append", help="Verified pilot archive report; repeat for each pilot")
     run_parser = sub.add_parser("run")
     run_parser.add_argument("batch", type=Path)
     args = parser.parse_args()

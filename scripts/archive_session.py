@@ -96,7 +96,7 @@ def trace_check(results):
 def copy_binary_file(src, dst):
     # Hardlink only immutable trace bytes while staging; copy all metadata because
     # it will be rewritten. tar stores the actual bytes, not links to source paths.
-    if Path(src).suffix == ".raw":
+    if Path(src).suffix in (".raw", ".bin", ".cbin"):
         try:
             os.link(src, dst)
             return dst
@@ -116,6 +116,42 @@ def sample_hashes(recording):
             samples.append({"segment": segment, "start": start, "end": end,
                             "sha256": hashlib.sha256(data.tobytes()).hexdigest()})
     return samples
+
+
+def portable_recording(original, raw, work, target):
+    import spikeinterface as si
+    from spikeinterface.core.core_tools import _get_paths_list
+
+    if type(original).__name__ == "BinaryFolderRecording":
+        binary_source = Path(original._kwargs["folder_path"]).resolve()
+        require(binary_source.is_relative_to(work), f"Binary outside this session's work directory: {binary_source}")
+        shutil.copytree(binary_source, target, copy_function=copy_binary_file)
+    else:
+        # Without preprocessing motion, this pipeline leaves the filtered/CAR
+        # extractor lazy over raw SpikeGLX. Saving it as a binary changes some
+        # filtered trace samples (the filter sees different chunk boundaries),
+        # so preserve the acquisition and the *exact* preprocessing chain instead.
+        require(type(original).__name__ == "CommonReferenceRecording", f"Unsupported extractor: {original}")
+        paths = _get_paths_list(original.to_dict(recursive=True))
+        require(len(paths) == 1 and Path(paths[0]).resolve() == raw,
+                f"Unexpected lazy recording dependencies: {paths}")
+        raw_target = target.parent / "raw"
+        if not raw_target.exists():
+            require(not any(p.is_symlink() for p in raw.rglob("*")), "Raw data contain symlinks")
+            shutil.copytree(raw, raw_target, copy_function=copy_binary_file)
+        recording_dict = original.to_dict(recursive=True)
+        leaf = recording_dict
+        while isinstance(leaf["kwargs"].get("recording"), dict):
+            leaf = leaf["kwargs"]["recording"]
+        require(leaf["class"].endswith(".SpikeGLXRecordingExtractor") and
+                Path(leaf["kwargs"]["folder_path"]).resolve() == raw,
+                "Unexpected lazy recording extractor")
+        leaf["kwargs"]["folder_path"] = str(raw_target)
+        portable = si.load(recording_dict)
+        require(_get_paths_list(portable.to_dict(recursive=True)) == [str(raw_target)],
+                "Rebased recording depends on external data")
+        return portable
+    return si.load(target)
 
 
 def prepare(args, parent):
@@ -138,12 +174,8 @@ def prepare(args, parent):
     binary_root.mkdir()
     for name in summary:
         original = si.load(source / "preprocessed" / f"{name}.json", base_folder=raw)
-        require(type(original).__name__ == "BinaryFolderRecording", f"Unsupported extractor: {original}")
-        binary_source = Path(original._kwargs["folder_path"]).resolve()
-        require(binary_source.is_relative_to(work), f"Binary outside this session's work directory: {binary_source}")
         target = binary_root / name
-        shutil.copytree(binary_source, target, copy_function=copy_binary_file)
-        portable = si.load(target)
+        portable = portable_recording(original, raw, work, target)
         require(np.array_equal(original.channel_ids, portable.channel_ids), "Channel IDs changed")
         samples[name] = sample_hashes(original)
         require(samples[name] == sample_hashes(portable), f"Copied recording differs: {name}")
@@ -166,12 +198,14 @@ def prepare(args, parent):
             if src.exists():
                 shutil.copy2(src, provenance / name)
     (bundle / "RESTORE.md").write_text(
-        "# Restoring this archive\n\nExtract with `tar -xf SESSION.tar`. Preprocessed traces are in `recordings/`; "
-        "they are motion-corrected only when preprocessing.motion_correction.apply is true. "
+        "# Restoring this archive\n\nExtract with `tar -xf SESSION.tar`. "
+        "`recordings/` contains either cached preprocessed traces (DREDGE) or a single copy "
+        "of the acquisition used by the lazy preprocessing chain (KS4-only). "
+        "Preprocessed traces are motion-corrected only when preprocessing.motion_correction.apply is true. "
         "KS4 motion estimates, when enabled, are in `spikesorted/motion/`.\n"
         "Load `preprocessed/NAME.json` with SpikeInterface and `base_folder=ROOT/preprocessed`.\n"
         "Load analyzers with `si.load_sorting_analyzer(ROOT/postprocessed/NAME.zarr)`.\n"
-        "NWB is a Zarr store: use `hdmf_zarr.NWBZarrIO`. Raw data are not included.\n"
+        "NWB is a Zarr store: use `hdmf_zarr.NWBZarrIO`.\n"
         "Historical logs/provenance may mention old paths; operational recording references are portable.\n"
     )
     files = {}

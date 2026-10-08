@@ -6,6 +6,7 @@ from pathlib import Path
 import sys
 import tarfile
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -119,6 +120,26 @@ class ArchiveSafetyTests(unittest.TestCase):
                                                "min_drift_channels": 64, "sorter": {"do_correction": True}}}}
         with self.assertRaisesRegex(RuntimeError, "Two motion correction paths"):
             archive_session.expected_motion(params, 80)
+
+    def test_batch_requires_report_for_every_existing_archive(self):
+        raw = self.root / "raw_ecephys/cohort/date/session"
+        raw.mkdir(parents=True)
+        (raw / "recording.ap.bin").write_bytes(b"data")
+        archive_root = self.root / "session_archives/ks4_baseline"
+        archive = archive_root / "cohort/date/session.tar"
+        archive.parent.mkdir(parents=True)
+        archive.write_bytes(b"retained")
+        args = SimpleNamespace(user_root=self.root, archive_root=archive_root, pilot_report=[])
+        with self.assertRaisesRegex(RuntimeError, "verification report for each existing archive"):
+            arrhenius_batch.start(args)
+        self.assertFalse((self.root / "batch_runs").exists())
+
+    def test_batch_rejects_duplicate_pilot_reports(self):
+        report = self.root / "pilot.json"
+        report.write_text(json.dumps({"raw": "duplicate"}))
+        args = SimpleNamespace(user_root=self.root, archive_root=None, pilot_report=[report, report])
+        with self.assertRaisesRegex(RuntimeError, "Duplicate pilot reports"):
+            arrhenius_batch.start(args)
 
 
 if __name__ == "__main__":
