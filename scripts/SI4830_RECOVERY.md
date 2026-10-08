@@ -55,3 +55,28 @@
 Before running any cleanup or changing the historical batch manifest, inspect the
 archive report and confirm the restored data load correctly. Merely producing a
 tarball or a green curation task is not sufficient.
+
+## Detached recovery job
+
+After pulling the findings commit and the recovery script commit, submit from
+the pipeline repository root on Arrhenius:
+
+```bash
+U=/nobackup/proj/disk/dmclab/personal/$USER
+sbatch --output="$U/session_log/recover-si4830-%j.out" \
+  --export=ALL,SI4830_REPO="$PWD" scripts/recover_si4830_session.sh
+```
+
+This job enforces the skipped-row/verification preconditions and checks the image
+SHA-256. It copies the frozen pipeline/config to
+`batch_runs/20261006_180017/recovery_si4830_JOBID`, changes only the curation
+container in that copy, and uses a copy of the original submit script pointed at
+the recovery config. It submits exactly one resumed Nextflow controller and waits
+for it, then runs the existing archive pack/restore verification. The archive
+records the config diff, image provenance/checksum, verification report, and
+original parameter hash. If either step fails, its work/results are retained;
+there is no cleanup or manifest change even if archive verification succeeds.
+
+Monitor `session_log/recover-si4830-JOBID.out` and the nested pipeline log in
+the recovery directory. Archive report:
+`batch_runs/20261006_180017/recovery_si4830_JOBID/archive_report.json`.

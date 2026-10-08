@@ -148,7 +148,9 @@ def prepare(args, parent):
             src = args.provenance / "pipeline" / name
             if src.exists():
                 shutil.copy2(src, provenance / name)
-        for name in ("source_commit.txt", "source_diff.patch"):
+        for name in ("source_commit.txt", "source_diff.patch", "si4830_recovery.json",
+                     "si4830_image.provenance.json", "si4830_image.sha256",
+                     "si4830_verification.json"):
             src = args.provenance / name
             if src.exists():
                 shutil.copy2(src, provenance / name)
