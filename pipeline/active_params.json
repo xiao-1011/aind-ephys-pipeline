@@ -65,8 +65,8 @@
         },
         "custom_preprocessing_pipeline": null,
         "motion_correction": {
-            "compute": true,
-            "apply": true,
+            "compute": false,
+            "apply": false,
             "preset": "dredge",
             "detect_kwargs": {},
             "select_kwargs": {},
@@ -339,7 +339,7 @@
                 "chunk_duration": "1s",
                 "progress_bar": false
             },
-            "skip_motion_correction": true,
+            "skip_motion_correction": false,
             "min_drift_channels": 64,
             "raise_if_fails": true,
             "clear_cache": false,
