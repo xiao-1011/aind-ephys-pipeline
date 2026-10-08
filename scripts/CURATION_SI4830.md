@@ -12,6 +12,9 @@ runs formatter/imputer regression tests. Package versions remain pinned to the
 base image. `/opt/si4830/provenance.json` records package versions, source/patch
 checksums, the base-image SHA-256, and our pipeline commit. The resulting SIF has
 adjacent `.sha256` and `.provenance.json` files. Existing images are not overwritten.
+The build uses `--ignore-fakeroot-command`: Arrhenius's host fakeroot executable
+cannot run against this older base image's libraries. The file-only patch works
+with Apptainer's root-mapped namespace instead.
 
 ## Build on Arrhenius
 

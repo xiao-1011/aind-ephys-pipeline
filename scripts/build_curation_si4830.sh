@@ -22,6 +22,7 @@ mkdir -p "$(dirname "$SIF")" "$USER_DIR/apptainer_tmp"
 BUILD="$(mktemp -d "$USER_DIR/apptainer_tmp/si4830-build-XXXXXX")"
 export APPTAINER_TMPDIR="$BUILD/tmp"
 export APPTAINER_CACHEDIR="$USER_DIR/apptainer_cache/.apptainer"
+unset SINGULARITY_CACHEDIR
 mkdir -p "$APPTAINER_TMPDIR" "$APPTAINER_CACHEDIR"
 trap 'rc=$?; if [[ $rc == 0 ]]; then rm -rf -- "$BUILD"; else echo "Build failed; retained $BUILD and any partial image"; fi' EXIT
 
@@ -40,7 +41,10 @@ output.write_text(json.dumps(report, indent=2) + '\n')
 print(json.dumps(report), flush=True)
 PY
 
-apptainer build --build-arg "base_image=$BASE" --build-arg "source_dir=$REPO" \
+# The host fakeroot executable needs newer libraries than this base image has.
+# Root-mapped user namespaces suffice: this recipe only patches owned files and
+# does not install OS packages or perform operations needing emulated ownership.
+apptainer build --ignore-fakeroot-command --build-arg "base_image=$BASE" --build-arg "source_dir=$REPO" \
     --build-arg "build_manifest=$BUILD/manifest.json" "$SIF.partial" "$REPO/environment/curation_si4830.def"
 # A fresh runtime process also tests that the modified module/bytecode is loaded.
 apptainer exec --env OPENBLAS_NUM_THREADS=1,OMP_NUM_THREADS=1 "$SIF.partial" /opt/conda/bin/python /opt/si4830/test_si4830.py -v
