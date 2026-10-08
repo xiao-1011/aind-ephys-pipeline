@@ -1,0 +1,24 @@
+# Build via scripts/build_curation_si4830.sh on an x86-64 CPU node.
+Bootstrap: localimage
+From: {{ base_image }}
+
+%files
+    {{ source_dir }}/environment/patches/spikeinterface-4830.patch /opt/si4830/spikeinterface-4830.patch
+    {{ source_dir }}/scripts/apply_si4830.py /opt/si4830/apply_si4830.py
+    {{ source_dir }}/tests/test_si4830.py /opt/si4830/test_si4830.py
+    {{ build_manifest }} /opt/si4830/provenance.json
+
+%post
+    set -e
+    export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1
+    /opt/conda/bin/python /opt/si4830/apply_si4830.py \
+        --patch /opt/si4830/spikeinterface-4830.patch \
+        --provenance /opt/si4830/provenance.json
+
+%test
+    export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1
+    /opt/conda/bin/python /opt/si4830/test_si4830.py -v
+
+%labels
+    Description Pipeline base 1.4.0 with SpikeInterface 0.105.0 PR 4830 backport for curation
+    SpikeInterfaceBackport 2750986478b23a5a4dac721dc550358ebe098813
