@@ -36,4 +36,5 @@ echo "Verification output: $OUT"
 CONTAINER=(apptainer exec --home "$OUT/home" -B "$USER_DIR" -B "$WORK:$WORK:ro" --env "$ENV,HF_HUB_OFFLINE=1")
 "${CONTAINER[@]}" "$BASE" /opt/conda/bin/python -u "$SCRIPT" baseline --output "$OUT"
 "${CONTAINER[@]}" "$SIF" /opt/conda/bin/python -u "$SCRIPT" patched --output "$OUT"
+CONTAINER=(apptainer exec --home "$OUT/home" -B "$USER_DIR" -B "$WORK:$WORK:ro" --env "$ENV")
 "${CONTAINER[@]}" "$SIF" /opt/conda/bin/python -u "$SCRIPT" capsule --output "$OUT"

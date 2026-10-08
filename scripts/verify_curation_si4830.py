@@ -160,10 +160,20 @@ def predict(args):
 
 def capsule(args):
     import pandas as pd
+    from huggingface_hub import HfApi
 
     out = args.output
     state = json.loads((out / "inputs.json").read_text())
     require((out / "baseline.json").exists() and (out / "patched.json").exists(), "Prediction checks incomplete")
+    # Capsule 409a9a5 calls list_repo_files(repo_id=...) even when model files
+    # have been cached, so HF_HUB_OFFLINE blocks it. Allow the metadata request
+    # but fail if a model's upstream revision differs from the frozen snapshot.
+    def check_model_revisions():
+        for model in state["models"].values():
+            require(HfApi().model_info(model["repo"]).sha == model["revision"],
+                    f"Model changed since baseline: {model['repo']}")
+
+    check_model_revisions()
     # Capsule 409a9a5 uses repo_id= even when checking model requirements. Keep its
     # original identifiers; the shell enables HF_HUB_OFFLINE after snapshotting,
     # so these resolve to the same frozen models used by the prediction checks.
@@ -171,6 +181,7 @@ def capsule(args):
     with (out / "capsule.log").open("w") as log:
         subprocess.run(["bash", "run", "--params", str(params)], cwd=out / "capsule/code",
                        stdout=log, stderr=subprocess.STDOUT, check=True)
+    check_model_revisions()
     results = out / "capsule/results"
     csv_files = list(results.glob("unit_labels_*.csv"))
     require(len(csv_files) == 1, "Missing classifier output")

@@ -54,7 +54,15 @@ Output: `$U/session_log/si4830_verify_JOBID/`, including `verification.json`, mo
 revision/file hashes, predictions, image provenance, `capsule.log`, and
 `capsule/results/`. This is a standalone verification, not a batch-manifest update
 or a completed QC/NWB/archive recovery. Frozen model snapshots are recorded at
-verification time; equality checks use those same snapshots in both images.
+verification time; equality checks use those same snapshots in both images. The
+capsule also queries the Hub for model filenames, so its replay requires network
+access; the verifier checks the model revision before and after replay. If only
+the final replay fails, rerun that phase without overwriting the frozen inputs:
+
+```bash
+sbatch --output="$U/session_log/replay-curation-si4830-%j.out" \
+  scripts/replay_curation_si4830.sh "$U/session_log/si4830_verify_JOBID"
+```
 
 ## Enable for future Nextflow curation
 
