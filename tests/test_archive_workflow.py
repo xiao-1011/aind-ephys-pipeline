@@ -99,6 +99,27 @@ class ArchiveSafetyTests(unittest.TestCase):
             arrhenius_batch.remove_owned(target, root, "cohort/date/session")
         self.assertTrue(outside.exists())
 
+    def test_expected_motion_for_dredge(self):
+        params = {"preprocessing": {"motion_correction": {"compute": True, "apply": True}},
+                  "spikesorting": {"kilosort4": {"skip_motion_correction": True,
+                                               "min_drift_channels": 64, "sorter": {"do_correction": True}}}}
+        self.assertEqual(archive_session.expected_motion(params, 80), (True, False))
+
+    def test_expected_motion_for_ks4_and_low_channel_shank(self):
+        params = {"preprocessing": {"motion_correction": {"compute": False, "apply": False}},
+                  "spikesorting": {"kilosort4": {"skip_motion_correction": False,
+                                               "min_drift_channels": 64, "sorter": {"do_correction": True}}}}
+        self.assertEqual(archive_session.expected_motion(params, 80), (False, True))
+        self.assertEqual(archive_session.expected_motion(params, 63), (False, False))
+        self.assertEqual(archive_session.expected_motion(params, 64), (False, True))
+
+    def test_rejects_double_correction(self):
+        params = {"preprocessing": {"motion_correction": {"compute": True, "apply": True}},
+                  "spikesorting": {"kilosort4": {"skip_motion_correction": False,
+                                               "min_drift_channels": 64, "sorter": {"do_correction": True}}}}
+        with self.assertRaisesRegex(RuntimeError, "Two motion correction paths"):
+            archive_session.expected_motion(params, 80)
+
 
 if __name__ == "__main__":
     unittest.main()

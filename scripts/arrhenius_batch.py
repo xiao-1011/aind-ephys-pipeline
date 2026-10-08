@@ -87,7 +87,9 @@ def start(args):
     user_root = args.user_root.resolve()
     repo = Path(__file__).resolve().parents[1]
     raw_root = user_root / "raw_ecephys"
-    archive_root = user_root / "session_archives"
+    archive_root = (args.archive_root or user_root / "session_archives").resolve()
+    require(archive_root.is_relative_to(user_root / "session_archives"),
+            "Archive root must be inside the session_archives directory")
     pilot = json.loads(args.pilot_report.read_text()) if args.pilot_report else None
     sessions = []
     for raw in sorted(raw_root.glob("*/*/*")):
@@ -222,6 +224,7 @@ if __name__ == "__main__":
     sub = parser.add_subparsers(dest="mode", required=True)
     start_parser = sub.add_parser("start")
     start_parser.add_argument("--user-root", type=Path, required=True)
+    start_parser.add_argument("--archive-root", type=Path, help="Isolated archive root under user-root/session_archives")
     start_parser.add_argument("--pilot-report", type=Path)
     run_parser = sub.add_parser("run")
     run_parser.add_argument("batch", type=Path)
