@@ -70,6 +70,18 @@ diagnostics_20261009/`. Three synthetic tests cover exact contextual recovery,
 shift rejection, and nonfinite rejection. Regenerate the aggregate report only
 after both recovery tasks succeed and all 16 `curation_complete` markers exist.
 
+The new report job **3563214** has an `afterok:3562854` dependency and writes
+only to `report_20261009/` via a symlinked read-only input view. It requires
+all 16 completion markers, verifies the frozen reporter checksums, and leaves
+both the 14 completed shanks and the previous failed partial report untouched.
+The aggregate report is valid only if `report_20261009/report_complete` exists.
+
+Preliminary read-only inspection of the 14 completed shanks found mostly lower
+QC-pass SUA counts and lower four-quarter waveform cosine under interpolation.
+These counts and held-out measures concern this **postprocessing** trace policy
+with historical masks; they do not establish that KS4's built-in sorting
+correction is inaccurate. No final trace recommendation or full batch yet.
+
 ## Progress checkpoint: 2026-10-08 21:10 CEST
 
 - Active array: **3541170** (16 shanks, concurrency 4).
