@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Replay postprocessing/curation on fixed DREDGE-100 sorted units only.
 
-Two float32 (not whitened) lazy recording views: original filtered/referenced
-traces from matched verified KS4 pilot and corrected DREDGE archive binary.
+Two float32 (not whitened) views of materialized filtered/referenced binaries:
+the original from the matched KS4 pilot and corrected DREDGE archive binary.
 Everything generated lives in a new namespace; no archive/source is modified.
 """
 
@@ -160,7 +160,13 @@ def prepare(user_root, index):
     dredge_trace_models.check_models(u)
     root = test / "replays" / rel / f"group{group}"
     assert not root.exists() and not root.is_symlink(), root
-    source_json = pilot / "outputs" / rel / "preprocessed" / f"{name}.json"
+    # The archived preprocessing lazy JSON has an original-capsule-relative
+    # raw path (".") and cannot be loaded from outputs/preprocessed. Reuse the
+    # original materialized binary consumed by the pinned KS4 postprocessor,
+    # as in the completed KS4 trace sensitivity test.
+    pp_code, pp_args = frozen.capsule_source(pilot / "work" / rel, "postprocessing", group)
+    source_json = pp_code.parent / "data" / f"binary_{name}.json"
+    assert source_json.is_file(), source_json
     corrected_json = staged / "preprocessed" / f"{name}.json"
     original = si.load(source_json, base_folder=source_json.parent)
     corrected = si.load(corrected_json, base_folder=corrected_json.parent)
@@ -172,7 +178,6 @@ def prepare(user_root, index):
         f = item["frame"]
         assert np.array_equal(historic.recording.get_traces(start_frame=f, end_frame=f + 1000),
                               corrected.get_traces(start_frame=f, end_frame=f + 1000)), "Archived analyzer did not use corrected binary"
-    pp_code, pp_args = frozen.capsule_source(pilot / "work" / rel, "postprocessing", group)
     cur_code, cur_args = frozen.capsule_source(pilot / "work" / rel, "curation", group)
     pp_params = json.loads(pp_args)
     assert pp_params["use_motion_corrected"] is False
@@ -201,7 +206,8 @@ def prepare(user_root, index):
         stage_capsule(root, arm, name, view_json, staged / "recordings" / name, pp_code, pp_params)
     provenance = {"session": rel, "group": group, "name": name, "dredge_archive_report": str(archive_report),
                   "archive_stage_report": str(staged / "stage_report.json"),
-                  "original_ks4_pilot_recording": str(source_json), "dredge_corrected_recording": str(corrected_json),
+                  "original_ks4_pilot_binary_json": str(source_json.resolve()),
+                  "dredge_corrected_recording": str(corrected_json),
                   "fixed_units": historic.unit_ids.tolist(), "fixed_sparsity": True,
                   "spikeinterface": si.__version__, "sample_checks": samples,
                   "postprocessing_code": str(pp_code), "curation_code": str(cur_code),

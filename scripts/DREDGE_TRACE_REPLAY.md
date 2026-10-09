@@ -2,7 +2,8 @@
 
 This **downstream-only** paired test keeps each verified DREDGE-100 sort fixed.
 For all five previously paired sessions (20 shanks), compare the original
-filtered/referenced trace retained by the corresponding KS4 pilot against the
+filtered/referenced binary consumed by the corresponding KS4 pilot's pinned
+postprocessing capsule against the
 saved DREDGE-corrected trace from its verified archive. Both inputs are cast
 to non-whitened float32 before postprocessing. This does not rerun sorting,
 estimate new motion, or reproduce either sorter's internal whitening.
@@ -25,11 +26,20 @@ archive staging verified each extracted member's SHA-256 against the verified
 archive manifest (five sessions, ~197 GB). Stage jobs: `3569932` (5/5
 complete). Probe jobs: `3569806` (5/5 complete).
 
+Read-only preflight `3584535` failed before generating replay outputs: the
+pilot's lazy preprocessing JSON contains a capsule-relative raw path and is
+not loadable from its archived outputs directory. The waiting gate, remainder
+array and report (`3584482`, `3584494`, `3584495`) were cancelled without
+running. Revised sources use the materialized `binary_<shank>.json` actually
+consumed by the pinned KS4 postprocessor (as in the completed KS4 trace test).
+
 The frozen replay script `dredge_trace_replay.sh` first runs one shank as
-`--array=0` (gate job `3584482`). The remaining `--array=1-19%4` shanks
-(job `3584494`) have an `afterok:3584482` dependency, so a gate failure
-blocks the rest. The report job `3584495` has an `afterok:3584494`
-dependency, and independently checks all 20 completion markers. The
+`--array=0` (gate). The remaining `--array=1-19%4` shanks have an
+`afterok:<gate>` dependency, so a gate failure blocks the rest. The report
+has an `afterok:<remaining-array>` dependency, and independently checks all
+20 completion markers. Revised frozen sources are in `source_v2/`, with a
+separate checksum manifest; the original cancelled attempt and failed
+preflight logs and sources are retained unchanged in `source/`. The
 postprocessing code is copied and patched
 to pass the historical channel mask, not symlinked; fixed sorting, float32
 binary-JSON inputs and per-shank provenance remain in each replay directory.
