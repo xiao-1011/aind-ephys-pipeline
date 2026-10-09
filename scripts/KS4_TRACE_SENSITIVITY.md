@@ -82,6 +82,26 @@ These counts and held-out measures concern this **postprocessing** trace policy
 with historical masks; they do not establish that KS4's built-in sorting
 correction is inaccurate. No final trace recommendation or full batch yet.
 
+### 2026-10-09: shared-IP Hugging Face API limit
+
+Recovery task 3562854_5 completed with its retained corrected binary hash
+unchanged (15/16 completion markers). Task 3562854_6 and its clean retry
+3563933_6 both failed **before staging** at the live Hugging Face HEAD check:
+HTTP 429 on the cluster's shared IP, even after a delayed retry. Neither
+modified group2. The dependent reports 3563214/3564469 were cancelled or
+dependency-failed without creating `report_20261009/`.
+
+For group2 only, a newly checksummed recovery source uses a local, fail-closed
+model verifier instead of querying the rate-limited live API. It validates the
+two exact pinned repo/revision pairs, cached `refs/main`, file sets, and SHA-256
+of **all files** in both the recorded SI #4830 verification snapshots and the
+actual replay HF cache. This attests to the model bytes the curation uses;
+it **does not claim to prove the upstream HEAD is unchanged**. The original
+frozen replay/report sources and prior failed checks are retained. Fresh
+recovery and report jobs write job IDs/logs and new source hashes under
+`diagnostics_20261009/` (offline prefix). The report still requires all 16
+completion markers and writes only to its isolated view.
+
 ## Progress checkpoint: 2026-10-08 21:10 CEST
 
 - Active array: **3541170** (16 shanks, concurrency 4).

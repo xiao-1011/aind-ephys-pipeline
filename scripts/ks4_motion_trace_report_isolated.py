@@ -7,6 +7,7 @@ Only the new report_20261009 directory receives generated files.
 
 import argparse
 import importlib.util
+import json
 from pathlib import Path
 import sys
 
@@ -62,6 +63,9 @@ def main():
     report = test / "report_20261009"
     source = test / "source/ks4_motion_trace_report.py"
     assert source.is_file()
+    # Fail before creating a destination if the pinned cache has changed.
+    from ks4_motion_trace_models import check_models
+    model_check = check_models(u)
     stage(test, report)
     sys.path.insert(0, str(test / "source"))
     spec = importlib.util.spec_from_file_location("frozen_ks4_report", source)
@@ -69,7 +73,7 @@ def main():
     spec.loader.exec_module(frozen)
     assert frozen.SESSIONS == SESSIONS
     frozen.TEST = str(report.relative_to(u))
-    frozen.check_models(u)
+    (report / "offline_model_check.json").write_text(json.dumps(model_check, indent=2) + "\n")
     frozen.results(args)
     assert (report / "REPORT.md").is_file() and (report / "comparison.csv").is_file()
     (report / "report_complete").write_text("passed\n")

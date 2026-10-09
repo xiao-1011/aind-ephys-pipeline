@@ -41,13 +41,17 @@ def verify_saved(saved, live, original):
     return {"exact_contextual_windows": len(frames), "max_change_from_uncorrected": maximum}
 
 
-def recover(user_root, index):
+def recover(user_root, index, offline_model_check=False):
     u = user_root.resolve()
     test = u / "baseline_pilots/ks4_native_motion_trace_test_20261008"
     sys.path.insert(0, str(test / "source"))
     import ks4_motion_trace_replay as frozen
 
-    frozen.check_models(u)
+    if offline_model_check:
+        from ks4_motion_trace_models import check_models
+        check_models(u)
+    else:
+        frozen.check_models(u)
     rel, group = frozen.SESSIONS[index // 4], index % 4
     assert rel == "cohort08/20260719/vr2520260719_g0" and group in (1, 2)
     name = f"block0_imec0.ap_recording1_group{group}"
@@ -140,5 +144,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--user-root", type=Path, required=True)
     parser.add_argument("--index", type=int, choices=(5, 6), required=True)
+    parser.add_argument("--offline-model-check", action="store_true", help="Verify pinned snapshots and hashes instead of querying Hugging Face HEAD")
     args = parser.parse_args()
-    recover(args.user_root, args.index)
+    recover(args.user_root, args.index, offline_model_check=args.offline_model_check)
