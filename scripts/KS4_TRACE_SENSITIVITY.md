@@ -102,6 +102,49 @@ recovery and report jobs write job IDs/logs and new source hashes under
 `diagnostics_20261009/` (offline prefix). The report still requires all 16
 completion markers and writes only to its isolated view.
 
+### Final paired downstream trace result, 2026-10-09
+
+Offline-verified group2 recovery **3565490_6** completed, exit 0: 25/25
+contextual windows matched the retained corrected binary exactly; the saved
+binary hash was unchanged; both curation arms completed. Isolated aggregate
+report **3565491** completed, exit 0, with all **16/16** shanks and
+`report_20261009/report_complete: passed`. The complete report and all 16
+per-shank matched-unit labels and QC metrics live under `report_20261009/`.
+The two 429 retries and the original failed report remain recorded.
+
+For the four follow-up sessions (2,185 **identical** sorted unit IDs in each
+trace arm), QC-pass is **753 uncorrected vs 736 SI-interpolated**, and QC-pass
+SUA is **288 vs 122**. Matching unit labels directly: 195 SUA labels were
+lost (166 to MUA, 29 to noise), three SUA labels gained, and only 23 units
+changed default-QC status. Of the originally QC-pass SUA, 167 ceased to be
+QC-pass SUA and one gained that combined status. Held-out four-quarter
+template cosine decreased in median by 0.038–0.090 in **every** session;
+the fraction improved was 0.001–0.026. Median peak-channel quarter range
+increased by 15–45 um. Sampled waveform plots illustrate variability; they
+are not ground truth or a representative independent sample.
+
+The five-session restore-verified archive comparison (including the initial
+KS4 pilot and separately recovered DREDGE session) yields KS4 vs DREDGE:
+
+| Session | KS4 units / QC / QC-SUA | DREDGE units / QC / QC-SUA |
+|---|---:|---:|
+| vr1520260318_g0 | 807 / 388 / 181 | 803 / 344 / 216 |
+| vr2220260501_g0 | 703 / 297 / 153 | 702 / 282 / 215 |
+| vr2520260719_g0 | 570 / 141 / 39 | 621 / 121 / 96 |
+| vr2820260921_g0 | 591 / 250 / 68 | 637 / 204 / 128 |
+| vr2320260721_g0 | 321 / 67 / 29 | 345 / 63 / 34 |
+| **Total** | **2992 / 1143 / 470** | **3108 / 1014 / 689** |
+
+Across 20 paired shanks, KS4 has more QC-pass units on 15 and more QC-pass
+SUA on only two. These are **different sorts and different analyzer traces**;
+the archive counts cannot isolate sorting-time motion correction. In contrast,
+the trace replay holds sorting fixed but uses SI interpolation, not KS4's
+internal algorithm or updated channel masks. Keep the current uncorrected
+postprocessing policy for these pilots; do not adopt this SI-interpolated
+analyzer recipe on count changes alone. Visually review motion jumps, border
+channels, and representative SUA transitions before any production decision.
+No full baseline batch, source deletion, or manifest change was authorized.
+
 ## Progress checkpoint: 2026-10-08 21:10 CEST
 
 - Active array: **3541170** (16 shanks, concurrency 4).
