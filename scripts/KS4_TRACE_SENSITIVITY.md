@@ -43,6 +43,33 @@ mode in pipeline-base 1.4.0. It verifies identical spike vectors and unit IDs
 and writes `REPORT.md`, `comparison.csv`, `waveform_stability_summary.json`,
 and per-shank metric/label comparisons. The full KS4 batch is **not** launched.
 
+## 2026-10-09: two-shank contextual trace recovery
+
+The original array 3541170 completed 14/16 shanks. Indices 5/6 (cohort08
+vr2520260719_g0, groups 1/2) failed a strict equality check comparing their
+saved 1-second-chunk float32 binary against direct **100-frame** interpolation.
+The report 3541251 failed closed and wrote no `report_complete` marker.
+
+Read-only compute-node diagnostic 3562411 checked successful group0 and both
+failures. All sampled traces are finite, use the same channels and absolute time,
+and direct requests repeat exactly. Only the 100-frame requests differed: at
+most 9.54e-7 / 1.91e-6 for groups 1/2, mainly on edge channels. Requesting
+the same frames with surrounding context (including windows across 1-second
+chunk boundaries) matches the retained binary **bit for bit**. This is a
+request-window numerical effect, not evidence of shifted frames or corrupt
+binary data. Do not silently substitute a tolerance for exact validation.
+
+Recovery array 3562854 uses *only* existing incomplete group1/2 directories,
+their retained 20 GB corrected binaries and original fixed sorting/sparsity.
+It checks 25 deterministic contextual windows for exact, finite agreement
+before staging the missing control/postprocessing/curation arms. It checks the
+corrected binary SHA-256 again after postprocessing. Completed shanks, pilot
+outputs, raw, and archives are untouched. Frozen sources, checksums, diagnostics
+and logs live in `baseline_pilots/ks4_native_motion_trace_test_20261008/
+diagnostics_20261009/`. Three synthetic tests cover exact contextual recovery,
+shift rejection, and nonfinite rejection. Regenerate the aggregate report only
+after both recovery tasks succeed and all 16 `curation_complete` markers exist.
+
 ## Progress checkpoint: 2026-10-08 21:10 CEST
 
 - Active array: **3541170** (16 shanks, concurrency 4).
