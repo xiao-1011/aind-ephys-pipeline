@@ -65,8 +65,8 @@
         },
         "custom_preprocessing_pipeline": null,
         "motion_correction": {
-            "compute": false,
-            "apply": false,
+            "compute": true,
+            "apply": true,
             "preset": "dredge",
             "detect_kwargs": {},
             "select_kwargs": {},
@@ -174,8 +174,7 @@
                         "bin_duration_s": 60
                     },
                     "snr": {
-                        "peak_sign": "both",
-                        "peak_mode": "extremum"
+                        "method": "extremum"
                     },
                     "isi_violation": {
                         "isi_threshold_ms": 1.5,
@@ -211,8 +210,7 @@
                     "sd_ratio": {
                         "censored_period_ms": 4.0,
                         "correct_for_drift": true,
-                        "correct_for_template_itself": true,
-                        "peak_sign": "neg"
+                        "correct_for_template_itself": true
                     },
                     "firing_range": {
                         "bin_size_s": 5,
@@ -339,7 +337,7 @@
                 "chunk_duration": "1s",
                 "progress_bar": false
             },
-            "skip_motion_correction": false,
+            "skip_motion_correction": true,
             "min_drift_channels": 64,
             "raise_if_fails": true,
             "clear_cache": false,

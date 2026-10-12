@@ -84,6 +84,31 @@ def summarize(root):
     return rows
 
 
+def require_finite_metrics(frames):
+    # SpikeInterface turns a metric function's exception (e.g. a stale parameter
+    # name) into an all-NaN column while the task still succeeds. Pool all shanks
+    # of the session so a few unit-poor shanks cannot trip the check on their own.
+    import pandas as pd
+
+    require(frames, "No quality metrics to check")
+    pooled = pd.concat(frames.values(), ignore_index=True)
+    require(len(pooled), "Quality metrics have no units")
+    empty = [c for c in pooled.columns if not pd.to_numeric(pooled[c], errors="coerce").notna().any()]
+    require(not empty, f"Quality metrics with no finite value in any shank: {empty}")
+
+
+def check_metrics(root):
+    import spikeinterface as si
+
+    frames = {}
+    for path in sorted((root / "postprocessed").glob("*.zarr")):
+        analyzer = si.load_sorting_analyzer(path, load_extensions=False, read_only=True)
+        extension = analyzer.get_extension("quality_metrics")
+        require(extension is not None, f"Missing quality metrics: {path.name}")
+        frames[path.name] = extension.get_data()
+    require_finite_metrics(frames)
+
+
 def trace_check(results):
     with (results / "nextflow/trace.txt").open() as f:
         rows = list(csv.DictReader(f, delimiter="\t"))
@@ -169,6 +194,7 @@ def prepare(args, parent):
     bundle = parent / raw.name
     shutil.copytree(source, bundle)
     summary = summarize(source)
+    check_metrics(source)
     samples = {}
     binary_root = bundle / "recordings"
     binary_root.mkdir()
