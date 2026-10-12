@@ -41,6 +41,15 @@ def require(condition, message):
         raise RuntimeError(message)
 
 
+def expected_motion(params, n_channels):
+    preprocessing = params["preprocessing"]["motion_correction"]
+    kilosort4 = params["spikesorting"]["kilosort4"]
+    require(not preprocessing["apply"] or preprocessing["compute"], "Cannot apply uncomputed preprocessing motion")
+    sorter_enabled = not kilosort4["skip_motion_correction"] and kilosort4["sorter"]["do_correction"]
+    require(not (preprocessing["apply"] and sorter_enabled), "Two motion correction paths requested")
+    return preprocessing["compute"], sorter_enabled and n_channels >= kilosort4["min_drift_channels"]
+
+
 def recording_paths_inside(recording, root):
     from spikeinterface.core.core_tools import _get_paths_list
 
@@ -75,6 +84,31 @@ def summarize(root):
     return rows
 
 
+def require_finite_metrics(frames):
+    # SpikeInterface turns a metric function's exception (e.g. a stale parameter
+    # name) into an all-NaN column while the task still succeeds. Pool all shanks
+    # of the session so a few unit-poor shanks cannot trip the check on their own.
+    import pandas as pd
+
+    require(frames, "No quality metrics to check")
+    pooled = pd.concat(frames.values(), ignore_index=True)
+    require(len(pooled), "Quality metrics have no units")
+    empty = [c for c in pooled.columns if not pd.to_numeric(pooled[c], errors="coerce").notna().any()]
+    require(not empty, f"Quality metrics with no finite value in any shank: {empty}")
+
+
+def check_metrics(root):
+    import spikeinterface as si
+
+    frames = {}
+    for path in sorted((root / "postprocessed").glob("*.zarr")):
+        analyzer = si.load_sorting_analyzer(path, load_extensions=False, read_only=True)
+        extension = analyzer.get_extension("quality_metrics")
+        require(extension is not None, f"Missing quality metrics: {path.name}")
+        frames[path.name] = extension.get_data()
+    require_finite_metrics(frames)
+
+
 def trace_check(results):
     with (results / "nextflow/trace.txt").open() as f:
         rows = list(csv.DictReader(f, delimiter="\t"))
@@ -87,7 +121,7 @@ def trace_check(results):
 def copy_binary_file(src, dst):
     # Hardlink only immutable trace bytes while staging; copy all metadata because
     # it will be rewritten. tar stores the actual bytes, not links to source paths.
-    if Path(src).suffix == ".raw":
+    if Path(src).suffix in (".raw", ".bin", ".cbin"):
         try:
             os.link(src, dst)
             return dst
@@ -109,6 +143,42 @@ def sample_hashes(recording):
     return samples
 
 
+def portable_recording(original, raw, work, target):
+    import spikeinterface as si
+    from spikeinterface.core.core_tools import _get_paths_list
+
+    if type(original).__name__ == "BinaryFolderRecording":
+        binary_source = Path(original._kwargs["folder_path"]).resolve()
+        require(binary_source.is_relative_to(work), f"Binary outside this session's work directory: {binary_source}")
+        shutil.copytree(binary_source, target, copy_function=copy_binary_file)
+    else:
+        # Without preprocessing motion, this pipeline leaves the filtered/CAR
+        # extractor lazy over raw SpikeGLX. Saving it as a binary changes some
+        # filtered trace samples (the filter sees different chunk boundaries),
+        # so preserve the acquisition and the *exact* preprocessing chain instead.
+        require(type(original).__name__ == "CommonReferenceRecording", f"Unsupported extractor: {original}")
+        paths = _get_paths_list(original.to_dict(recursive=True))
+        require(len(paths) == 1 and Path(paths[0]).resolve() == raw,
+                f"Unexpected lazy recording dependencies: {paths}")
+        raw_target = target.parent / "raw"
+        if not raw_target.exists():
+            require(not any(p.is_symlink() for p in raw.rglob("*")), "Raw data contain symlinks")
+            shutil.copytree(raw, raw_target, copy_function=copy_binary_file)
+        recording_dict = original.to_dict(recursive=True)
+        leaf = recording_dict
+        while isinstance(leaf["kwargs"].get("recording"), dict):
+            leaf = leaf["kwargs"]["recording"]
+        require(leaf["class"].endswith(".SpikeGLXRecordingExtractor") and
+                Path(leaf["kwargs"]["folder_path"]).resolve() == raw,
+                "Unexpected lazy recording extractor")
+        leaf["kwargs"]["folder_path"] = str(raw_target)
+        portable = si.load(recording_dict)
+        require(_get_paths_list(portable.to_dict(recursive=True)) == [str(raw_target)],
+                "Rebased recording depends on external data")
+        return portable
+    return si.load(target)
+
+
 def prepare(args, parent):
     import numpy as np
     import spikeinterface as si
@@ -117,22 +187,21 @@ def prepare(args, parent):
 
     source, raw, work = args.results.resolve(), args.raw.resolve(), args.work.resolve()
     require(source.is_dir() and raw.is_dir() and work.is_dir(), "Missing source/raw/work directory")
+    require(args.provenance and (args.provenance / "pipeline/active_params.json").is_file(),
+            "Frozen active params required to verify the motion path")
     trace_check(source)
     require(not any(p.is_symlink() for p in source.rglob("*")), "Results contain symlinks; refusing implicit external dependencies")
     bundle = parent / raw.name
     shutil.copytree(source, bundle)
     summary = summarize(source)
+    check_metrics(source)
     samples = {}
     binary_root = bundle / "recordings"
     binary_root.mkdir()
     for name in summary:
         original = si.load(source / "preprocessed" / f"{name}.json", base_folder=raw)
-        require(type(original).__name__ == "BinaryFolderRecording", f"Unsupported extractor: {original}")
-        binary_source = Path(original._kwargs["folder_path"]).resolve()
-        require(binary_source.is_relative_to(work), f"Binary outside this session's work directory: {binary_source}")
         target = binary_root / name
-        shutil.copytree(binary_source, target, copy_function=copy_binary_file)
-        portable = si.load(target)
+        portable = portable_recording(original, raw, work, target)
         require(np.array_equal(original.channel_ids, portable.channel_ids), "Channel IDs changed")
         samples[name] = sample_hashes(original)
         require(samples[name] == sample_hashes(portable), f"Copied recording differs: {name}")
@@ -155,10 +224,14 @@ def prepare(args, parent):
             if src.exists():
                 shutil.copy2(src, provenance / name)
     (bundle / "RESTORE.md").write_text(
-        "# Restoring this archive\n\nExtract with `tar -xf SESSION.tar`. Corrected traces are in `recordings/`.\n"
+        "# Restoring this archive\n\nExtract with `tar -xf SESSION.tar`. "
+        "`recordings/` contains either cached preprocessed traces (DREDGE) or a single copy "
+        "of the acquisition used by the lazy preprocessing chain (KS4-only). "
+        "Preprocessed traces are motion-corrected only when preprocessing.motion_correction.apply is true. "
+        "KS4 motion estimates, when enabled, are in `spikesorted/motion/`.\n"
         "Load `preprocessed/NAME.json` with SpikeInterface and `base_folder=ROOT/preprocessed`.\n"
         "Load analyzers with `si.load_sorting_analyzer(ROOT/postprocessed/NAME.zarr)`.\n"
-        "NWB is a Zarr store: use `hdmf_zarr.NWBZarrIO`. Raw data are not included.\n"
+        "NWB is a Zarr store: use `hdmf_zarr.NWBZarrIO`.\n"
         "Historical logs/provenance may mention old paths; operational recording references are portable.\n"
     )
     files = {}
@@ -178,8 +251,13 @@ def verify_bundle(root, manifest):
     import numpy as np
     import spikeinterface as si
     import spikeinterface.preprocessing as spre
+    from spikeinterface.core.motion import Motion
     from hdmf_zarr import NWBZarrIO
 
+    params_path = root / "archive_provenance/active_params.json"
+    require(params_path.is_file(), "Missing frozen active params for motion verification")
+    with params_path.open() as f:
+        params = json.load(f)
     require(summarize(root) == manifest["shanks"], "Restored curated counts differ")
     for name in manifest["shanks"]:
         rec = si.load(root / "preprocessed" / f"{name}.json", base_folder=root / "preprocessed")
@@ -190,9 +268,26 @@ def verify_bundle(root, manifest):
         recording_paths_inside(analyzer.recording, root)
         require(sample_hashes(analyzer.recording) == manifest["samples"][name], f"Analyzer trace samples differ: {name}")
         si.load(root / "spikesorted" / name).to_spike_vector()
-        motion_info = spre.load_motion_info(root / "preprocessed/motion" / name)
-        require(motion_info["motion"] is not None, f"Missing DREDge motion: {name}")
-        require(all(np.isfinite(d).all() for d in motion_info["motion"].displacement), f"Nonfinite motion: {name}")
+        pre_motion, ks4_motion = expected_motion(params, rec.get_num_channels())
+        pre_folder = root / "preprocessed/motion" / name
+        ks4_folder = root / "spikesorted/motion" / name
+        if pre_motion:
+            require(pre_folder.is_dir(), f"Missing preprocessing motion: {name}")
+            motion_info = spre.load_motion_info(pre_folder)
+            require(motion_info["motion"] is not None, f"Missing preprocessing motion: {name}")
+            require(all(np.isfinite(d).all() for d in motion_info["motion"].displacement),
+                    f"Nonfinite preprocessing motion: {name}")
+        else:
+            require(not pre_folder.exists(), f"Unexpected preprocessing motion: {name}")
+        if ks4_motion:
+            require(ks4_folder.is_dir(), f"Missing KS4 motion: {name}")
+            motion = Motion.load(ks4_folder)
+            require(motion.displacement and all(d.size and np.isfinite(d).all() for d in motion.displacement),
+                    f"Missing or nonfinite KS4 displacement: {name}")
+            require(np.isfinite(motion.spatial_bins_um).all() and
+                    all(np.isfinite(t).all() for t in motion.temporal_bins_s), f"Nonfinite KS4 motion bins: {name}")
+        else:
+            require(not ks4_folder.exists(), f"Unexpected KS4 motion: {name}")
     units = 0
     nwbs = list((root / "nwb").glob("*.nwb"))
     require(nwbs, "Missing NWB store")

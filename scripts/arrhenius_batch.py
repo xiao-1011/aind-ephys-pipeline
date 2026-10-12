@@ -61,6 +61,16 @@ def validate_report(report, row, params_hash):
     require(archive_params_hash(archive) == params_hash, "Archive used different parameters")
 
 
+def verified_image(image):
+    # The adjacent .sha256 is written by scripts/build_curation_si4830.sh.
+    image = Path(image).resolve()
+    checksum = image.with_name(image.name + ".sha256")
+    require(image.is_file() and checksum.is_file(), f"Missing curation image or checksum: {image}")
+    expected = checksum.read_text().split()[0]
+    require(digest(image) == expected, f"Curation image checksum mismatch: {image}")
+    return image, expected
+
+
 def remove_owned(target, root, relative):
     # Cleanup is deliberately constrained to three-component cohort/date/session
     # directories under a fresh, batch-owned root. Never touch raw or old outputs.
@@ -87,8 +97,12 @@ def start(args):
     user_root = args.user_root.resolve()
     repo = Path(__file__).resolve().parents[1]
     raw_root = user_root / "raw_ecephys"
-    archive_root = user_root / "session_archives"
-    pilot = json.loads(args.pilot_report.read_text()) if args.pilot_report else None
+    archive_root = (args.archive_root or user_root / "session_archives").resolve()
+    require(archive_root.is_relative_to(user_root / "session_archives"),
+            "Archive root must be inside the session_archives directory")
+    pilot_reports = [json.loads(path.read_text()) for path in (args.pilot_report or [])]
+    pilot_by_raw = {report["raw"]: report for report in pilot_reports}
+    require(len(pilot_by_raw) == len(pilot_reports), "Duplicate pilot reports for one raw session")
     sessions = []
     for raw in sorted(raw_root.glob("*/*/*")):
         if not raw.is_dir():
@@ -99,16 +113,34 @@ def start(args):
         rel = str(raw.relative_to(raw_root))
         sessions.append({"relative": rel, "raw": str(raw), "archive": str(archive_root / (rel + ".tar")), "status": "pending"})
     require(sessions, "No raw sessions discovered")
+    if args.session:
+        selected = set(args.session)
+        require(len(selected) == len(args.session), "Duplicate --session")
+        require(selected <= {row["relative"] for row in sessions}, f"Unknown --session: {sorted(selected - {row['relative'] for row in sessions})}")
+        sessions = [row for row in sessions if row["relative"] in selected]
+    require(set(pilot_by_raw).issubset({row["raw"] for row in sessions}), "Pilot report does not match any raw session")
+    existing = {row["raw"] for row in sessions if Path(row["archive"]).exists()}
+    require(existing == set(pilot_by_raw), "Supply exactly one verification report for each existing archive")
+    curation_sif, curation_sha256 = verified_image(
+        args.curation_sif or user_root / "containers/aind-ephys-curation_1.4.0_si4830.sif")
+    dirty = subprocess.run(["git", "diff", "--quiet", "HEAD"], cwd=repo).returncode
+    require(dirty == 0, "Tracked files differ from HEAD; commit (on main) before starting a batch")
     batch = user_root / "batch_runs" / datetime.now().strftime("%Y%m%d_%H%M%S")
     batch.mkdir(parents=True, exist_ok=False)
     snapshot = batch / "snapshot"
     shutil.copytree(repo / "pipeline", snapshot / "pipeline")
     shutil.copytree(repo / "scripts", snapshot / "scripts", ignore=shutil.ignore_patterns("__pycache__"))
+    # archive_session.py packs these names into every archive's provenance.
+    shutil.copy2(curation_sif.with_name(curation_sif.name + ".sha256"), snapshot / "si4830_image.sha256")
+    provenance = curation_sif.with_name(curation_sif.name + ".provenance.json")
+    if provenance.is_file():
+        shutil.copy2(provenance, snapshot / "si4830_image.provenance.json")
     for name in ("outputs", "work", "logs", "reports", "archive_staging"):
         (batch / name).mkdir()
     params_hash = digest(snapshot / "pipeline/active_params.json")
     manifest = {"batch": str(batch), "created_at": now(), "user_root": str(user_root),
-                "params_sha256": params_hash, "sessions": sessions, "status": "prepared"}
+                "params_sha256": params_hash, "curation_sif": str(curation_sif),
+                "curation_sif_sha256": curation_sha256, "sessions": sessions, "status": "prepared"}
     commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip()
     (snapshot / "source_commit.txt").write_text(commit + "\n")
     diff = subprocess.check_output(["git", "diff", "HEAD"], cwd=repo)
@@ -118,7 +150,8 @@ def start(args):
         if not archive.exists():
             require(not archive.with_name(archive.name + ".partial").exists(), f"Inspect existing partial archive: {archive}")
             continue
-        require(pilot and pilot["raw"] == row["raw"], f"Existing archive has no supplied verification report: {archive}")
+        pilot = pilot_by_raw.get(row["raw"])
+        require(pilot is not None, f"Existing archive has no supplied verification report: {archive}")
         validate_report(pilot, row, params_hash)
         atomic_json(batch / "reports" / (Path(row["relative"]).name + ".json"), pilot)
         update(batch, manifest, row, "archived_pilot_sources_preserved", totals=totals(pilot))
@@ -150,6 +183,11 @@ def run(args):
         manifest["status"] = "running"
         atomic_json(batch / "manifest.json", manifest)
         env = dict(os.environ, PIPELINE_PATH=str(snapshot), NXF_SESSION_WORK_ROOT=str(batch / "work"))
+        env.pop("CURATION_SIF", None)
+        if "curation_sif" in manifest:  # absent in batches started before the pinned image
+            image_path, image_sha256 = verified_image(manifest["curation_sif"])
+            require(image_sha256 == manifest["curation_sif_sha256"], "Curation image changed since batch start")
+            env["CURATION_SIF"] = str(image_path)
         image = user_root / "apptainer_cache/ghcr.io-allenneuraldynamics-aind-ephys-pipeline-base-1.4.0.img"
         row = None
         try:
@@ -222,7 +260,10 @@ if __name__ == "__main__":
     sub = parser.add_subparsers(dest="mode", required=True)
     start_parser = sub.add_parser("start")
     start_parser.add_argument("--user-root", type=Path, required=True)
-    start_parser.add_argument("--pilot-report", type=Path)
+    start_parser.add_argument("--archive-root", type=Path, help="Isolated archive root under user-root/session_archives")
+    start_parser.add_argument("--pilot-report", type=Path, action="append", help="Verified pilot archive report; repeat for each pilot")
+    start_parser.add_argument("--session", action="append", help="Only this cohort/date/session (relative to raw_ecephys); repeatable")
+    start_parser.add_argument("--curation-sif", type=Path, help="Curation image with adjacent .sha256 (default: SI #4830 backport)")
     run_parser = sub.add_parser("run")
     run_parser.add_argument("batch", type=Path)
     args = parser.parse_args()

@@ -769,6 +769,12 @@
                                                     "enum": ["extremum", "at_index"],
                                                     "default": "extremum",
                                                     "description": "Mode for peak detection in SNR computation."
+                                                },
+                                                "method": {
+                                                    "type": "string",
+                                                    "enum": ["extremum", "at_index", "peak_to_peak"],
+                                                    "default": "extremum",
+                                                    "description": "SNR amplitude method (SpikeInterface >= 0.105). The pinned 0.105 compute_snrs rejects peak_sign/peak_mode, and the metric becomes NaN."
                                                 }
                                             }
                                         },
