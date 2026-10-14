@@ -3,8 +3,10 @@
 Fresh re-sort of all raw sessions with the policy chosen in
 `MOTION_POLICY_REVIEW.md`: DREDGE-100 motion correction in preprocessing,
 KS4 internal correction off, and the DREDGE-corrected recording as analyzer input.
-The archived batch `batch_runs/20261006_180017` (35 sessions, archives under
-`session_archives/cohort*/`) stays untouched as the historical record.
+The archived batch `batch_runs/20261006_180017` (35 sessions) stays untouched as
+the historical record. Its archives were written to `session_archives/cohort*/` and
+moved unchanged to `session_archives/dredge100_v1/cohort*/` on 2026-10-14; its
+manifest and reports still show the old paths (see the README in that folder).
 
 ## Changes from the archived batch
 

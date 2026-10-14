@@ -33,10 +33,11 @@ def inspect(user_root, index):
     u, rel, pilot, report_file = source_paths(user_root, index)
     root = u / TEST
     report = json.loads(report_file.read_text())
-    archive = Path(report["archive"])
     name = rel.split("/")[-1]
     assert report["verified"] is True and report["session"].endswith(name)
-    assert archive == u / "session_archives" / rel.split("/")[0] / rel.split("/")[1] / (name + ".tar")
+    # Reports record the original location; the archives moved to session_archives/dredge100_v1 on 2026-10-14.
+    assert Path(report["archive"]) == u / "session_archives" / (rel + ".tar")
+    archive = u / "session_archives/dredge100_v1" / (rel + ".tar")
     assert archive.is_file() and archive.stat().st_size == report["size"]
     assert len(report["sha256"]) == 64 and len(report["shanks"]) == 4
     assert all((pilot / "outputs" / rel / "preprocessed" / f"{shank}.json").is_file()

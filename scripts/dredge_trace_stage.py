@@ -74,11 +74,13 @@ def stage(user_root, index):
     root = u / TEST
     inventory = json.loads((root / "inventory" / (rel.split("/")[-1] + ".json")).read_text())
     report = json.loads(report_path.read_text())
-    archive = Path(inventory["archive"])
     assert inventory["session"] == rel and report["verified"] is True
     assert inventory["archive_sha256"] == report["sha256"]
     assert inventory["report"] == str(report_path)
-    assert archive == Path(report["archive"]) and archive.stat().st_size == report["size"]
+    # Reports and inventory record the original location; moved to session_archives/dredge100_v1 on 2026-10-14.
+    assert Path(inventory["archive"]) == Path(report["archive"]) == u / "session_archives" / (rel + ".tar")
+    archive = u / "session_archives/dredge100_v1" / (rel + ".tar")
+    assert archive.stat().st_size == report["size"]
     destination = root / "staged" / rel
     assert not destination.exists() and not destination.is_symlink(), destination
     with tarfile.open(archive, "r:") as tar:

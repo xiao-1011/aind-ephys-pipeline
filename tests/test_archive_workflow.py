@@ -139,10 +139,19 @@ class ArchiveSafetyTests(unittest.TestCase):
     def test_batch_rejects_duplicate_pilot_reports(self):
         report = self.root / "pilot.json"
         report.write_text(json.dumps({"raw": "duplicate"}))
-        args = SimpleNamespace(user_root=self.root, archive_root=None, pilot_report=[report, report],
+        args = SimpleNamespace(user_root=self.root, archive_root=self.root / "session_archives/test", pilot_report=[report, report],
                                session=None, curation_sif=None)
         with self.assertRaisesRegex(RuntimeError, "Duplicate pilot reports"):
             arrhenius_batch.start(args)
+
+    def test_batch_requires_named_archive_root(self):
+        self.raw_sessions("c/d/a")
+        for root in (None, self.root / "session_archives", self.root / "elsewhere"):
+            args = SimpleNamespace(user_root=self.root, archive_root=root, pilot_report=[],
+                                   session=None, curation_sif=self.image())
+            with self.assertRaisesRegex(RuntimeError, "archive-root is required|named folder inside"):
+                arrhenius_batch.start(args)
+        self.assertFalse((self.root / "batch_runs").exists())
 
     def raw_sessions(self, *names):
         for name in names:
@@ -160,7 +169,7 @@ class ArchiveSafetyTests(unittest.TestCase):
 
     def test_batch_rejects_unknown_session(self):
         self.raw_sessions("c/d/a")
-        args = SimpleNamespace(user_root=self.root, archive_root=None, pilot_report=[],
+        args = SimpleNamespace(user_root=self.root, archive_root=self.root / "session_archives/test", pilot_report=[],
                                session=["c/d/missing"], curation_sif=self.image())
         with self.assertRaisesRegex(RuntimeError, "Unknown --session"):
             arrhenius_batch.start(args)
@@ -170,10 +179,10 @@ class ArchiveSafetyTests(unittest.TestCase):
         # An unselected session's archive must not demand a pilot report, and the
         # curation image is checked before any batch directory is created.
         self.raw_sessions("c/d/a", "c/d/b")
-        archive = self.root / "session_archives/c/d/b.tar"
+        archive = self.root / "session_archives/test/c/d/b.tar"
         archive.parent.mkdir(parents=True)
         archive.write_bytes(b"retained")
-        args = SimpleNamespace(user_root=self.root, archive_root=None, pilot_report=[],
+        args = SimpleNamespace(user_root=self.root, archive_root=self.root / "session_archives/test", pilot_report=[],
                                session=["c/d/a"], curation_sif=self.image(checksum="0" * 64))
         with self.assertRaisesRegex(RuntimeError, "Curation image checksum mismatch"):
             arrhenius_batch.start(args)

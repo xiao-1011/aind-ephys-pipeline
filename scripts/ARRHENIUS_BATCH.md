@@ -3,8 +3,12 @@
 Run on Arrhenius, from the pipeline clone:
 
 ```bash
-bash scripts/start_arrhenius_batch.sh /path/to/verified-pilot-report.json
+bash scripts/start_arrhenius_batch.sh <archive-name> /path/to/verified-pilot-report.json
 ```
+
+`<archive-name>` is a new folder under `session_archives/` (for example
+`dredge100_v3`); `arrhenius_batch.py start` requires `--archive-root` and refuses
+`session_archives/` itself, so batches never mix their archives.
 
 The launcher discovers session directories exactly three levels under
 `raw_ecephys/`, validates AP data presence, freezes pipeline settings/scripts,
@@ -18,8 +22,12 @@ not change the motion/sorting parameters or disable GPU processing.
 Each session is processed, packed as **one uncompressed `.tar` file**, extracted
 and verified, and only then cleaned. Tar is intentional: storage is acceptable,
 and it avoids recompressing Zarr while reducing inode use. Archives are in
-`session_archives/<cohort>/<date>/<session>.tar`. They contain corrected binaries,
+`session_archives/<archive-name>/<cohort>/<date>/<session>.tar`. They contain corrected binaries,
 sortings, analyzers, motion, QC, visualization, NWB-Zarr, configuration, and logs.
+The first batch (`batch_runs/20261006_180017`) wrote directly to
+`session_archives/<cohort>/...`; those archives were moved to
+`session_archives/dredge100_v1/` on 2026-10-14, and records written before that
+still show the old paths.
 Operational recording paths are rewritten to relative paths; raw data are not
 included or deleted. Historical provenance can still mention original paths.
 

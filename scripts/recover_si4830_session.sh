@@ -1,6 +1,9 @@
 #!/bin/bash
 # Resume only the retained skipped session, then build and restore-test its archive.
 # Submit from the pushed repository root: sbatch scripts/recover_si4830_session.sh
+# Historical (ran as job 3513952): the batch work/outputs it resumes from were deleted on
+# 2026-10-13, and the archive it wrote at session_archives/$REL.tar now lives in
+# session_archives/dredge100_v1/. ARCHIVE points there so the existing archive blocks a rerun.
 #SBATCH -A naiss2026-3-127-cpu
 #SBATCH --partition=cpu
 #SBATCH --nodes=1
@@ -20,7 +23,7 @@ BASE="$U/apptainer_cache/ghcr.io-allenneuraldynamics-aind-ephys-pipeline-base-1.
 RAW="$U/raw_ecephys/$REL"
 WORK="$B/work/$REL"
 RESULTS="$B/outputs/$REL"
-ARCHIVE="$U/session_archives/$REL.tar"
+ARCHIVE="$U/session_archives/dredge100_v1/$REL.tar"
 RECOVERY="$B/recovery_si4830_${SLURM_JOB_ID:?Submit with sbatch}"
 VERIFICATION="$U/session_log/si4830_verify_3513689/verification.json"
 

@@ -97,9 +97,11 @@ def start(args):
     user_root = args.user_root.resolve()
     repo = Path(__file__).resolve().parents[1]
     raw_root = user_root / "raw_ecephys"
-    archive_root = (args.archive_root or user_root / "session_archives").resolve()
-    require(archive_root.is_relative_to(user_root / "session_archives"),
-            "Archive root must be inside the session_archives directory")
+    archives = (user_root / "session_archives").resolve()
+    require(args.archive_root is not None, "--archive-root is required (a named folder under session_archives)")
+    archive_root = args.archive_root.resolve()
+    require(archive_root.is_relative_to(archives) and archive_root != archives,
+            "Archive root must be a named folder inside the session_archives directory")
     pilot_reports = [json.loads(path.read_text()) for path in (args.pilot_report or [])]
     pilot_by_raw = {report["raw"]: report for report in pilot_reports}
     require(len(pilot_by_raw) == len(pilot_reports), "Duplicate pilot reports for one raw session")
@@ -260,7 +262,8 @@ if __name__ == "__main__":
     sub = parser.add_subparsers(dest="mode", required=True)
     start_parser = sub.add_parser("start")
     start_parser.add_argument("--user-root", type=Path, required=True)
-    start_parser.add_argument("--archive-root", type=Path, help="Isolated archive root under user-root/session_archives")
+    start_parser.add_argument("--archive-root", type=Path, required=True,
+                              help="Named archive folder under user-root/session_archives, e.g. session_archives/dredge100_v3")
     start_parser.add_argument("--pilot-report", type=Path, action="append", help="Verified pilot archive report; repeat for each pilot")
     start_parser.add_argument("--session", action="append", help="Only this cohort/date/session (relative to raw_ecephys); repeatable")
     start_parser.add_argument("--curation-sif", type=Path, help="Curation image with adjacent .sha256 (default: SI #4830 backport)")
