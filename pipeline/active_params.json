@@ -83,6 +83,13 @@
                 "spatial_interpolation_method": "kriging",
                 "sigma_um": 20.0,
                 "p": 2
+            },
+            "noise_levels": {
+                "random_slices_kwargs": {
+                    "num_chunks_per_segment": 400,
+                    "chunk_duration": "500ms",
+                    "seed": 0
+                }
             }
         }
     },
@@ -103,13 +110,13 @@
                 "max_spikes_per_unit": 500,
                 "method": "uniform",
                 "margin_size": null,
-                "seed": null
+                "seed": 0
             },
             "noise_levels": {
                 "random_slices_kwargs": {
                     "num_chunks_per_segment": 20,
                     "chunk_size": 10000,
-                    "seed": null
+                    "seed": 0
                 }
             },
             "waveforms": {

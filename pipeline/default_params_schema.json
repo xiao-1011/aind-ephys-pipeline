@@ -411,6 +411,24 @@
                             "type": "object",
                             "default": {},
                             "description": "Additional keyword arguments for motion interpolation."
+                        },
+                        "noise_levels": {
+                            "type": "object",
+                            "description": "Seeded noise estimate cached before motion computation (dmclab preprocessing fork). If absent, SpikeInterface draws unseeded random chunks.",
+                            "additionalProperties": false,
+                            "required": ["random_slices_kwargs"],
+                            "properties": {
+                                "random_slices_kwargs": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": ["seed"],
+                                    "properties": {
+                                        "num_chunks_per_segment": {"type": "integer", "minimum": 1},
+                                        "chunk_duration": {"type": "string"},
+                                        "seed": {"type": "integer"}
+                                    }
+                                }
+                            }
                         }
                     }
                 }
