@@ -19,14 +19,22 @@ Everything else is identical: containers (pipeline-base 1.4.0, KS4 arm64,
 SI #4830 curation image), DREDGE-100 motion settings, KS4 settings, metrics,
 QC thresholds, UnitRefine/Bombcell configuration.
 
-400 chunks of 0.5 s was the smallest count that passed the noise-chunk pilot
-(`maintenance/noise_chunks_3sessions_20261020_135231`). A fixed seed makes the
-estimate repeatable; it does not make it closer to the full-recording noise.
+400 chunks of 0.5 s comes from the noise-chunk pilot
+(`maintenance/noise_chunks_3sessions_20261020_135231`, 3 sessions, 12 shanks).
+No count passed the accuracy gate (noise error vs the full-recording reference
+and peak recall/precision) on every shank: 20 chunks passed 0/12, 400 passed
+9/12, 800 and 1600 passed 11/12. All failures are in the low-yield session
+vr1520260319_g0. 400 was kept because 800 did not improve seed-to-seed sorting
+stability enough to meet the pilot's rule (unit agreement 0.746 vs 0.748;
+QC-SUA found by both seeds 0.917 vs 0.915). A fixed seed makes the estimate
+repeatable; it does not make it closer to the full-recording noise.
 
 ## What is and is not reproducible
 
-Repeat test (`batch_runs/20261022_160539` vs `20261022_172242`, vr15 and vr23,
-8 shanks; comparison in `maintenance/v3_reprotest_compare_20261026`):
+Repeat test (two runs, `batch_runs/20261022_160539` and `20261022_172242`, of
+vr15 and vr23, 8 shanks). The run folders and their archives have since been
+deleted; the comparison results are kept in
+`maintenance/v3_reprotest_compare_20261026`:
 
 - Motion, motion peaks and the corrected preprocessed binary: bit-identical on all shanks.
 - Postprocessing and curation labels: identical whenever the sorting is identical,
@@ -45,8 +53,8 @@ without a pinned revision.
 ## Full batch
 
 The two repeat-test runs were the pilot. Their archives
-(`session_archives/dredge100_v3_reprotest_{a,b}`) are not reused; all sessions
-are sorted fresh. From a clean `main` on Arrhenius:
+(`session_archives/dredge100_v3_reprotest_{a,b}`, since deleted) were not
+reused; all sessions were sorted fresh. From a clean `main` on Arrhenius:
 
 ```bash
 U=/nobackup/proj/disk/dmclab/personal/$USER
